@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 interface Artist {
   profile: {
@@ -55,12 +56,20 @@ interface PlaylistData {
 }
 
 export default function Playlist() {
-  const [authToken, setAuthToken] = useState('');
-  const [playlistUri, setPlaylistUri] = useState('spotify:playlist:0ebJAYMarXEhTrvkyXQUFy');
+  const searchParams = useSearchParams();
+  const [authToken, setAuthToken] = useState(searchParams.get('token') || '');
+  const [playlistUri, setPlaylistUri] = useState(searchParams.get('uri') || '');
   const [curlCommand, setCurlCommand] = useState('');
   const [playlistData, setPlaylistData] = useState<PlaylistData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Auto-fetch playlist if we have both URI and token
+  useEffect(() => {
+    if (authToken && playlistUri) {
+      fetchPlaylist();
+    }
+  }, [authToken, playlistUri]);
 
   const parseCurlCommand = () => {
     try {
@@ -83,6 +92,11 @@ export default function Playlist() {
   const fetchPlaylist = async () => {
     if (!authToken) {
       setError('Please provide an auth token');
+      return;
+    }
+
+    if (!playlistUri) {
+      setError('Please provide a playlist URI');
       return;
     }
 
@@ -143,12 +157,20 @@ export default function Playlist() {
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold">My Playlist</h1>
-          <Link 
-            href="/"
-            className="px-4 py-2 bg-black text-white rounded-full hover:bg-gray-800 transition-colors"
-          >
-            Back to Home
-          </Link>
+          <div className="flex gap-4">
+            <Link 
+              href="/library"
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
+            >
+              Back to Library
+            </Link>
+            <Link 
+              href="/"
+              className="px-4 py-2 bg-black text-white rounded-full hover:bg-gray-800 transition-colors"
+            >
+              Back to Home
+            </Link>
+          </div>
         </div>
 
         {/* cURL Command Input */}
