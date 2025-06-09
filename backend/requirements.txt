@@ -3,3 +3,4 @@ python-dotenv==1.0.0
 anthropic
 openai
 dataclasses-json
+pytest==7.4.0

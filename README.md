@@ -54,6 +54,11 @@ The environment variables are stored in Vercel. Linking to Vercel will set them 
 vercel env ls
 ```
 
+Also, you probably want to pull them locally for experimentation purposes. Run this from root directory.
+```
+vercel env pull .env.local
+```
+
 ### 3. Frontend Setup
 
 TODO

@@ -2,8 +2,30 @@ from .prompts import get_basic_query, decode_assistant_response
 from .types import Song
 from .clients import LLMClient, TextPrompt
 
-def search_library(client: LLMClient, library: list[Song], user_query: str, n: int = 3, verbose: bool = False) -> list[Song]:
-    prompt = get_basic_query(library, user_query, n)
+def search_library(client: LLMClient, library: list[Song], user_query: str, n: int = 3, chunk_size: int = 1000, verbose: bool = False) -> list[Song]:
+    # Break library into chunks of chunk_size songs
+    chunks = [library[i:i + chunk_size] for i in range(0, len(library), chunk_size)]
+
+    if verbose:
+        print(f"NUMBER OF CHUNKS= {len(chunks)}")
+    
+    # Run recursive search on each chunk
+    filtered_songs = []
+    for chunk in chunks:
+        chunk_results = recursive_search(client, chunk, user_query, n=n, verbose=verbose)
+        filtered_songs.extend(chunk_results)
+    
+    if verbose:
+        print(f"NUMBER OF FILTERED SONGS BEFORE REDUCING = {len(filtered_songs)}")
+
+    # If we have more songs than requested, run recursive search again on filtered set
+    if len(filtered_songs) > n:
+        filtered_songs = recursive_search(client, filtered_songs, user_query, n=n, verbose=verbose)
+        
+    return filtered_songs
+
+def recursive_search(client: LLMClient, sublibrary: list[Song], user_query: str, n: int = 3, verbose: bool = False) -> list[Song]:
+    prompt = get_basic_query(sublibrary, user_query, n)
 
     if verbose:
         print("PROMPT")
@@ -33,8 +55,8 @@ def search_library(client: LLMClient, library: list[Song], user_query: str, n: i
         print(song_ids)
 
         print("SONGS")
-        print([song for song in library if song.id in song_ids])
+        print([song for song in sublibrary if song.id in song_ids])
 
-    return [song for song in library if song.id in song_ids]
+    return [song for song in sublibrary if song.id in song_ids]
     
     
