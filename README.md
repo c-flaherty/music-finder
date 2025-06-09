@@ -7,7 +7,7 @@ A full-stack music search application with a Next.js frontend and Python backend
 - Node.js (v18 or higher)
 - Python (v3.8 or higher)
 - npm or yarn
-- Supabase account
+- Supabase + Vercel credentials
 
 ## Project Structure
 
@@ -30,96 +30,61 @@ cd music-finder
 
 ### 2. Backend Setup
 
-#### Create and Activate Virtual Environment
+#### Create virtual env and install dependencies
 
 ```bash
-# Create virtual environment
 python -m venv env1
-
-# Activate virtual environment
-# On macOS/Linux:
 source env1/bin/activate
-# On Windows:
-# env1\Scripts\activate
-```
-
-#### Install Python Dependencies
-
-```bash
 cd backend
 pip install -r requirements.txt
 ```
 
+#### Link to vercel
+
+```
+npm install -g vercel
+vercel login
+vercel link --project="music-finder"
+```
+
 #### Environment Variables
 
-Create a `.env` file in the `backend` directory with the following variables:
-
-```bash
-# Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-
-# API Keys (if using AI features)
-ANTHROPIC_API_KEY=your_anthropic_api_key
-OPENAI_API_KEY=your_openai_api_key
+The environment variables are stored in Vercel. Linking to Vercel will set them up. Confirm that they are configured correctly with:
+```
+vercel env ls
 ```
 
 ### 3. Frontend Setup
 
-```bash
-cd frontend/music-finder
-npm install
-```
-
-### 4. Supabase Setup
-
-1. Create a new project on [Supabase](https://supabase.com)
-2. Get your project URL and service role key from the project settings
-3. Create the necessary tables in your Supabase database:
-
-```sql
-CREATE TABLE songs (
-  id SERIAL PRIMARY KEY,
-  song_link TEXT,
-  song_metadata TEXT,
-  lyrics TEXT,
-  name TEXT NOT NULL,
-  artist TEXT NOT NULL,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-```
+TODO
 
 ## Running the Application
 
 ### Start the Backend (Development)
 
+Run from root directory:
 ```bash
-# Make sure you're in the backend directory and virtual environment is activated
-cd backend
-# The backend APIs are deployed on Vercel and can be tested locally using Vercel CLI
-vercel dev
+npx vercel dev --debug
 ```
 
 ### Start the Frontend (Development)
 
-```bash
-cd frontend/music-finder
-npm run dev
-```
-
-The frontend will be available at `http://localhost:3000`
+TODO 
 
 ## API Endpoints
 
 The backend provides the following API endpoints:
 
 - `POST /api/update-table` - Insert music data into Supabase tables
+- `POST /api/sync-user` - onboard or update userdata
+  - TODO: Not implemented at all
 - `GET /api/hello-world` - Test endpoint
-- `POST /api/search-songs` - Search for songs (if implemented)
+- `POST /api/search-songs` - Search for songs based on a natural language query
+  - TODO: Add user authentication to search over user's songs only
 
 ### Example API Usage
 
-test command for updating table:
+For `update-table`:
 ```
 curl -X POST http://localhost:3000/api/update-table   -H "Content-Type: application/json"   -d '{
     "tableName": "songs",
@@ -139,5 +104,12 @@ curl -X POST http://localhost:3000/api/update-table   -H "Content-Type: applicat
         "artist": "Artist Two"
       }
     ]
+  }'
+```
+
+For `search-songs`:
+```
+curl -X POST http://localhost:3000/api/search-songs   -H "Content-Type: application/json"   -d '{
+    "query": "any song will do"
   }'
 ```
