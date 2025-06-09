@@ -1,11 +1,12 @@
 # Music Finder
 
-A full-stack music search application with a Next.js frontend and Python backend API, integrated with Supabase for data storage.
+A full-stack music search application with a Next.js frontend and Python backend API (using Vercel), integrated with Supabase for data storage. Enables a user to search over their Spotify playlists with requests like "What was that song about kissing on a roof in New York? It had like a 90s vibe."
 
 ## Prerequisites
 
 - Node.js (v18 or higher)
 - Python (v3.8 or higher)
+- Poetry
 - npm or yarn
 - Supabase + Vercel credentials
 
@@ -30,14 +31,13 @@ cd music-finder
 
 ### 2. Backend Setup
 
-#### Create virtual env and install dependencies
+#### Setup virtual env
 
 ```bash
-python -m venv env1
-source env1/bin/activate
-cd backend
-pip install -r requirements.txt
+poetry install
+poetry env activate
 ```
+Run the command that is output to activate the environment.
 
 #### Link to vercel
 
