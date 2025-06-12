@@ -5,7 +5,7 @@ import os
 import random
 import time
 from dataclasses import dataclass
-from typing import Any, Tuple, cast
+from typing import Any, Tuple, cast, Union, List, Dict, Optional
 from dataclasses_json import DataClassJsonMixin
 import anthropic
 import openai
@@ -110,11 +110,9 @@ class TextResult(DataClassJsonMixin):
     text: str
 
 
-AssistantContentBlock = (
-    TextResult | ToolCall | AnthropicRedactedThinkingBlock | AnthropicThinkingBlock
-)
-UserContentBlock = TextPrompt | ToolFormattedResult
-GeneralContentBlock = UserContentBlock | AssistantContentBlock
+AssistantContentBlock = Union[TextResult, ToolCall, AnthropicRedactedThinkingBlock, AnthropicThinkingBlock]
+UserContentBlock = Union[TextPrompt, ToolFormattedResult]
+GeneralContentBlock = Union[UserContentBlock, AssistantContentBlock]
 LLMMessages = list[list[GeneralContentBlock]]
 
 

@@ -38,12 +38,48 @@ export default function Home() {
   const [search, setSearch] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('spotify_access_token');
     setIsAuthenticated(!!token);
     setLoading(false);
   }, []);
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!search.trim()) return;
+
+    setIsSearching(true);
+    try {
+      const token = localStorage.getItem('spotify_access_token');
+      if (!token) {
+        router.push('/?error=unauthorized');
+        return;
+      }
+
+      const response = await fetch('/api/spotify/search', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query: search })
+      });
+
+      if (!response.ok) {
+        throw new Error('Search failed');
+      }
+
+      const data = await response.json();
+      setSearchResults(data.results || []);
+    } catch (error) {
+      console.error('Search error:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -71,7 +107,7 @@ export default function Home() {
           Your AI music assistant. Instantly search, discover, and chat about your Spotify library.
         </p>
         {/* Modern Search Bar */}
-        <form className="w-full max-w-xl flex items-center bg-white border border-[#DDCDA8] rounded-2xl shadow-md px-4 md:px-5 py-3 focus-within:ring-2 focus-within:ring-[#F6A23B] transition-all mx-4">
+        <form onSubmit={handleSearch} className="w-full max-w-xl flex items-center bg-white border border-[#DDCDA8] rounded-2xl shadow-md px-4 md:px-5 py-3 focus-within:ring-2 focus-within:ring-[#F6A23B] transition-all mx-4">
           <svg className="w-5 h-5 md:w-6 md:h-6 text-[#838D5A]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" /></svg>
           <input
             type="text"
@@ -79,39 +115,48 @@ export default function Home() {
             placeholder="that song about a roof in New York?"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            disabled
+            disabled={!isAuthenticated}
           />
-          <button className="ml-2 px-4 md:px-5 py-2 bg-[#01D75E] text-white rounded-xl font-semibold shadow hover:bg-[#01c055] active:bg-[#00b04d] transition-colors font-roobert" disabled>
-            Ask
+          <button 
+            type="submit"
+            disabled={!isAuthenticated || isSearching}
+            className="ml-2 px-4 md:px-5 py-2 bg-[#01D75E] text-white rounded-xl font-semibold shadow hover:bg-[#01c055] active:bg-[#00b04d] transition-colors font-roobert disabled:bg-gray-400"
+          >
+            {isSearching ? 'Searching...' : 'Ask'}
           </button>
         </form>
       </header>
 
-      {/* Chat Preview */}
-      <section className="w-full max-w-2xl mx-auto mb-12 md:mb-20 px-4">
-        <div className="bg-white border border-[#DDCDA8] rounded-2xl shadow-md p-4 md:p-6 flex flex-col gap-1">
-          {chatMessages.map((msg, i) => (
-            <div
-              key={i}
-              className={
-                msg.sender === "user"
-                  ? "self-end max-w-[85%] md:max-w-[75%]"
-                  : "self-start max-w-[85%] md:max-w-[75%]"
-              }
-            >
-              <div
-                className={
-                  msg.sender === "user"
-                    ? "bg-[#007AFF] text-white px-3 md:px-4 py-2 rounded-full text-sm md:text-base font-medium shadow-sm"
-                    : "bg-[#E5E5EA] text-gray-800 px-3 md:px-4 py-2 rounded-full text-sm md:text-base font-medium shadow-sm"
-                }
-              >
-                {msg.text}
-              </div>
+      {/* Search Results */}
+      {searchResults.length > 0 && (
+        <section className="w-full max-w-2xl mx-auto mb-12 md:mb-20 px-4">
+          <div className="bg-white border border-[#DDCDA8] rounded-2xl shadow-md p-4 md:p-6">
+            <h2 className="text-xl font-['Proxima_Nova'] font-extrabold text-[#502D07] mb-4">Search Results</h2>
+            <div className="space-y-4">
+              {searchResults.map((song) => (
+                <a
+                  key={song.id}
+                  href={song.song_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
+                  <div className="flex items-center gap-4 p-4 bg-[#FFF5D1] rounded-lg hover:bg-[#DDCDA8] transition-colors cursor-pointer group">
+                    <div className="flex-1">
+                      <h3 className="font-['Proxima_Nova'] font-extrabold text-[#502D07] group-hover:text-[#F6A23B] transition-colors">
+                        {song.name}
+                      </h3>
+                      <p className="text-sm text-[#838D5A]">
+                        {song.artist}
+                      </p>
+                    </div>
+                  </div>
+                </a>
+              ))}
             </div>
-          ))}
-        </div>
-      </section>
+          </div>
+        </section>
+      )}
 
       {/* Auth Button */}
       <div className="w-full flex justify-center mb-6 md:mb-8 px-4">
