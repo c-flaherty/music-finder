@@ -4,6 +4,18 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
+// Add font-face declaration
+const proximaNovaExtrabold = `
+  @font-face {
+    font-family: 'Proxima Nova';
+    src: url('/fonts/proximanova/proximanova-extrabold-webfont.woff2') format('woff2'),
+         url('/fonts/proximanova/proximanova-extrabold-webfont.woff') format('woff'),
+         url('/fonts/proximanova/proximanova-extrabold-webfont.ttf') format('truetype');
+    font-weight: 800;
+    font-style: normal;
+  }
+`;
+
 interface PlaylistImage {
   url: string;
   width: number;
@@ -95,14 +107,15 @@ export default function Library() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 p-8">
+      <div className="min-h-screen bg-[#FFF5D1] p-8">
+        <style jsx global>{proximaNovaExtrabold}</style>
         <div className="max-w-7xl mx-auto">
-          <h1 className="text-3xl font-bold mb-8">Your Library</h1>
+          <h1 className="text-3xl font-['Proxima_Nova'] font-extrabold text-[#502D07] mb-8">Your Library</h1>
           <div className="animate-pulse space-y-4">
             {[...Array(5)].map((_, i) => (
               <div key={i} className="bg-white p-4 rounded-lg shadow">
-                <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                <div className="h-4 bg-[#DDCDA8] rounded w-3/4 mb-2"></div>
+                <div className="h-4 bg-[#DDCDA8] rounded w-1/2"></div>
               </div>
             ))}
           </div>
@@ -113,15 +126,16 @@ export default function Library() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-100 p-8">
+      <div className="min-h-screen bg-[#FFF5D1] p-8">
+        <style jsx global>{proximaNovaExtrabold}</style>
         <div className="max-w-7xl mx-auto">
-          <h1 className="text-3xl font-bold mb-8">Your Library</h1>
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
-            <strong className="font-bold">Error: </strong>
+          <h1 className="text-3xl font-['Proxima_Nova'] font-extrabold text-[#502D07] mb-8">Your Library</h1>
+          <div className="bg-[#DD8982] border border-[#E67961] text-[#502D07] px-4 py-3 rounded relative" role="alert">
+            <strong className="font-['Proxima_Nova'] font-extrabold">Error: </strong>
             <span className="block sm:inline">{error}</span>
             <button
               onClick={() => window.location.reload()}
-              className="mt-2 bg-red-100 hover:bg-red-200 text-red-800 font-semibold py-2 px-4 rounded"
+              className="mt-2 bg-[#F6A23B] hover:bg-[#E67961] text-white font-['Proxima_Nova'] font-extrabold py-2 px-4 rounded"
             >
               Try Again
             </button>
@@ -132,15 +146,16 @@ export default function Library() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
+    <div className="min-h-screen bg-[#FFF5D1] p-8">
+      <style jsx global>{proximaNovaExtrabold}</style>
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8">Your Library</h1>
+        <h1 className="text-3xl font-['Proxima_Nova'] font-extrabold text-[#502D07] mb-8">Your Library</h1>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {playlists.map((playlist) => (
             <Link 
               key={playlist.id} 
               href={`/playlist/${playlist.id}`}
-              className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-200"
+              className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-200 border border-[#DDCDA8]"
             >
               {playlist.images[0] && (
                 <img
@@ -150,10 +165,10 @@ export default function Library() {
                 />
               )}
               <div className="p-4">
-                <h2 className="text-xl font-semibold mb-2">{playlist.name}</h2>
-                <p className="text-gray-600 text-sm mb-2">{playlist.description}</p>
-                <p className="text-gray-500 text-sm">By {playlist.owner.display_name}</p>
-                <p className="text-gray-500 text-sm mt-2">{playlist.tracks.total} tracks</p>
+                <h2 className="text-xl font-['Proxima_Nova'] font-extrabold text-[#502D07] mb-2">{playlist.name}</h2>
+                <p className="text-[#838D5A] text-sm mb-2">{playlist.description}</p>
+                <p className="text-[#838D5A] text-sm">By {playlist.owner.display_name}</p>
+                <p className="text-[#838D5A] text-sm mt-2">{playlist.tracks.total} tracks</p>
               </div>
             </Link>
           ))}
