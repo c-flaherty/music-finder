@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 async function refreshAccessToken(refreshToken: string): Promise<string> {
   const response = await fetch('https://accounts.spotify.com/api/token', {
     method: 'POST',

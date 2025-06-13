@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function GET(request: Request) {
   console.log('Callback received:', {
     code: request.url.includes('code=') ? 'present' : 'missing',

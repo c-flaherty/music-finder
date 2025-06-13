@@ -52,6 +52,9 @@ async function getLyrics(songName: string, artistName: string): Promise<string> 
   }
 }
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function POST(request: Request) {
   const headersList = await headers();
   const authHeader = headersList.get('authorization');

@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function GET(request: Request) {
   // Extract playlist ID from the request URL
   const url = new URL(request.url);
