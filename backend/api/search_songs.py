@@ -2,8 +2,7 @@ import os
 import json
 import sys
 from datetime import datetime
-from vercel_helpers.request import VercelRequest
-from vercel_helpers.response import VercelResponse
+from vercel_asgi_helper import VercelRequest, VercelResponse
 
 # Add the search_library directory to Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
