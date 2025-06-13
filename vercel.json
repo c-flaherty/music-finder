@@ -11,8 +11,16 @@
     ],
     "routes": [
       {
-        "src": "/api/(.*)",
-        "dest": "backend/api/$1.py"
+        "src": "/api/search-songs",
+        "dest": "backend/api/search_songs.py"
+      },
+      {
+        "src": "/api/spotify/(.*)",
+        "dest": "frontend/music-finder/api/spotify/$1"
+      },
+      {
+        "src": "/api/auth/(.*)",
+        "dest": "frontend/music-finder/api/auth/$1"
       },
       {
         "src": "/(.*)",
