@@ -1,5 +1,24 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
+import Genius from 'genius-lyrics';
+
+// Initialize Genius client with access token
+const Client = new Genius.Client(process.env.GENIUS_ACCESS_TOKEN);
+
+// Helper function to fetch lyrics
+async function getLyrics(songName: string, artistName: string): Promise<string> {
+  try {
+    const searches = await Client.songs.search(`${songName} ${artistName}`);
+    if (searches.length > 0) {
+      const lyrics = await searches[0].lyrics();
+      return lyrics;
+    }
+    return '';
+  } catch (error) {
+    console.error('Error fetching lyrics:', error);
+    return '';
+  }
+}
 
 export async function POST(request: Request) {
   const headersList = await headers();
@@ -49,21 +68,31 @@ export async function POST(request: Request) {
       }
 
       const tracksData = await tracksResponse.json();
-      const songs = tracksData.items.map((item: any) => ({
-        id: item.track.id,
-        name: item.track.name,
-        artist: item.track.artists.map((a: any) => a.name).join(', '),
-        song_link: item.track.external_urls.spotify,
-        song_metadata: JSON.stringify({
-          album: item.track.album.name,
-          duration_ms: item.track.duration_ms,
-          popularity: item.track.popularity,
-          preview_url: item.track.preview_url
-        }),
-        lyrics: '' // We don't have lyrics from Spotify API
-      }));
+      
+      // Process tracks in parallel with lyrics fetching
+      const songsWithLyrics = await Promise.all(
+        tracksData.items.map(async (item: any) => {
+          const song = {
+            id: item.track.id,
+            name: item.track.name,
+            artist: item.track.artists.map((a: any) => a.name).join(', '),
+            song_link: item.track.external_urls.spotify,
+            song_metadata: JSON.stringify({
+              album: item.track.album.name,
+              duration_ms: item.track.duration_ms,
+              popularity: item.track.popularity,
+              preview_url: item.track.preview_url
+            }),
+            lyrics: ''
+          };
 
-      allSongs.push(...songs);
+          // Fetch lyrics for the song
+          song.lyrics = await getLyrics(song.name, song.artist);
+          return song;
+        })
+      );
+
+      allSongs.push(...songsWithLyrics);
     }
 
     // Remove duplicates based on song ID
@@ -76,7 +105,9 @@ export async function POST(request: Request) {
         id: song.id,
         name: song.name,
         artist: song.artist,
-        link: song.song_link
+        link: song.song_link,
+        hasLyrics: !!song.lyrics,
+        lyricsPreview: song.lyrics ? song.lyrics.substring(0, 100) + '...' : 'No lyrics found'
       }))
     });
 
