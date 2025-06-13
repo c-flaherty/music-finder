@@ -123,11 +123,11 @@ class LLMClient:
         self,
         messages: LLMMessages,
         max_tokens: int,
-        system_prompt: str | None = None,
+        system_prompt: Optional[str] = None,
         temperature: float = 0.0,
-        tools: list[ToolParam] | None = None,
-        tool_choice: dict[str, str] | None = None,
-        thinking_tokens: int | None = None,
+        tools: Optional[list[ToolParam]] = None,
+        tool_choice: Optional[dict[str, str]] = None,
+        thinking_tokens: Optional[int] = None,
     ) -> Tuple[list[AssistantContentBlock], dict[str, Any]]:
         """Generate responses.
 
@@ -190,11 +190,11 @@ class AnthropicDirectClient(LLMClient):
         self,
         messages: LLMMessages,
         max_tokens: int,
-        system_prompt: str | None = None,
+        system_prompt: Optional[str] = None,
         temperature: float = 0.0,
-        tools: list[ToolParam] | None = None,
-        tool_choice: dict[str, str] | None = None,
-        thinking_tokens: int | None = None,
+        tools: Optional[list[ToolParam]] = None,
+        tool_choice: Optional[dict[str, str]] = None,
+        thinking_tokens: Optional[int] = None,
     ) -> Tuple[list[AssistantContentBlock], dict[str, Any]]:
         """Generate responses.
 
@@ -409,11 +409,11 @@ class OpenAIDirectClient(LLMClient):
         self,
         messages: LLMMessages,
         max_tokens: int,
-        system_prompt: str | None = None,
+        system_prompt: Optional[str] = None,
         temperature: float = 0.0,
-        tools: list[ToolParam] | None = None,
-        tool_choice: dict[str, str] | None = None,
-        thinking_tokens: int | None = None,
+        tools: Optional[list[ToolParam]] = None,
+        tool_choice: Optional[dict[str, str]] = None,
+        thinking_tokens: Optional[int] = None,
     ) -> Tuple[list[AssistantContentBlock], dict[str, Any]]:
         """Generate responses.
 
