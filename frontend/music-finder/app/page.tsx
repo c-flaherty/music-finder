@@ -174,7 +174,7 @@ export default function Home() {
           Ask <span className="text-[#502D07]">Cannoli</span>
         </h1>
         <p className="text-base md:text-lg lg:text-xl text-[#502D07] text-center max-w-xl font-normal mb-6 md:mb-8 px-4">
-          What&apos;s that sound?
+          What&apos;s that sound? What&apos;s that song about?
         </p>
         {/* Modern Search Bar */}
         <form onSubmit={handleSearch} className="w-full max-w-xl flex items-center bg-white border border-[#DDCDA8] rounded-2xl shadow-md px-4 md:px-5 py-3 focus-within:ring-2 focus-within:ring-[#F6A23B] transition-all mx-4">
