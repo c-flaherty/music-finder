@@ -56,7 +56,7 @@ async function getLyrics(songName: string, artistName: string): Promise<string> 
     : '';
 
   // 1. Search for the song to get its ID
-  const searchCommand = `curl -s ${commonHeaderFlags} ${authHeaderFlag} --compressed 'https://api.genius.com/search?q=${searchQuery}'`;
+  const searchCommand = `curl -s ${commonHeaderFlags} ${authHeaderFlag} --compressed "https://api.genius.com/search?q=${searchQuery}"`;
 
   let songId: string | null = null;
   try {
@@ -75,7 +75,7 @@ async function getLyrics(songName: string, artistName: string): Promise<string> 
 
   // 2. Get the song details including lyrics using the found ID
   const safeSongId = String(songId).replace(/[^0-9]/g, '');
-  const songCommand = `curl -s ${commonHeaderFlags} --compressed 'https://api.genius.com/songs/${safeSongId}?text_format=plain'`;
+  const songCommand = `curl -s ${commonHeaderFlags} --compressed "https://api.genius.com/songs/${safeSongId}?text_format=plain"`;
 
   try {
     const { stdout } = await execAsync(songCommand);
