@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import { Client as GeniusClient } from 'genius-lyrics';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 interface SpotifyArtist {
   name: string;
@@ -34,20 +37,59 @@ interface Song {
   lyrics: string;
 }
 
-// Initialize Genius client with access token
-const genius = new GeniusClient(process.env.GENIUS_ACCESS_TOKEN);
-
-// Helper function to fetch lyrics
+// Helper function to fetch lyrics using a curl child process
 async function getLyrics(songName: string, artistName: string): Promise<string> {
+  const searchQuery = encodeURIComponent(`${songName} ${artistName}`);
+  
+  // Headers need to be individually wrapped in quotes for the command line
+  const commonHeaderFlags = [
+    `-H 'accept: */*'`,
+    `-H 'content-type: application/json'`,
+    `-H 'x-genius-ios-version: 7.7.0'`,
+    `-H 'x-genius-logged-out: true'`,
+    `-H 'accept-language: en-US,en;q=0.9'`,
+    `-H 'user-agent: Genius/1267 CFNetwork/3826.500.131 Darwin/24.5.0'`
+  ].join(' ');
+
+  const authHeaderFlag = process.env.GENIUS_ACCESS_TOKEN 
+    ? `-H 'Authorization: Bearer ${process.env.GENIUS_ACCESS_TOKEN}'`
+    : '';
+
+  // 1. Search for the song to get its ID
+  const searchCommand = `curl -s ${commonHeaderFlags} ${authHeaderFlag} --compressed 'https://api.genius.com/search?q=${searchQuery}'`;
+
+  let songId: string | null = null;
   try {
-    const searches = await genius.songs.search(`${songName} ${artistName}`);
-    if (searches.length > 0) {
-      const lyrics = await searches[0].lyrics();
-      return lyrics;
+    const { stdout } = await execAsync(searchCommand);
+    const searchData = JSON.parse(stdout);
+    songId = searchData.response?.hits?.[0]?.result?.id ?? null;
+    
+    if (!songId) {
+      console.error(`No song ID found in search results for: ${songName}`);
+      return '';
     }
-    return '';
   } catch (error) {
-    console.error('Error fetching lyrics:', error);
+    console.error(`Error executing curl search for ${songName}:`, error);
+    return '';
+  }
+
+  // 2. Get the song details including lyrics using the found ID
+  const safeSongId = String(songId).replace(/[^0-9]/g, '');
+  const songCommand = `curl -s ${commonHeaderFlags} --compressed 'https://api.genius.com/songs/${safeSongId}?text_format=plain'`;
+
+  try {
+    const { stdout } = await execAsync(songCommand);
+    const songData = JSON.parse(stdout);
+    const lyrics = songData.response?.song?.lyrics?.plain;
+
+    if (!lyrics) {
+      console.error(`No lyrics found in curl response for songId: ${safeSongId}.`);
+      // console.error('Full Genius API response from curl:', JSON.stringify(songData, null, 2));
+      return '';
+    }
+    return lyrics;
+  } catch (error) {
+    console.error(`Error executing curl song fetch for songId ${safeSongId}:`, error);
     return '';
   }
 }
@@ -158,30 +200,28 @@ async function processPlaylists(playlistsData: any, accessToken: string, query: 
 
     const tracksData = await tracksResponse.json();
     
-    // Process tracks in parallel with lyrics fetching
-    const songsWithLyrics = await Promise.all(
-      tracksData.items.map(async (item: SpotifyTrackItem) => {
-        const song: Song = {
-          id: item.track.id,
-          name: item.track.name,
-          artist: item.track.artists.map(a => a.name).join(', '),
-          song_link: item.track.external_urls.spotify,
-          song_metadata: JSON.stringify({
-            album: item.track.album.name,
-            duration_ms: item.track.duration_ms,
-            popularity: item.track.popularity,
-            preview_url: item.track.preview_url
-          }),
-          lyrics: ''
-        };
+    // Fetch lyrics for each track concurrently
+    const songsPromises = tracksData.items.map(async (item: SpotifyTrackItem) => {
+      const lyrics = await getLyrics(item.track.name, item.track.artists[0]?.name || '');
+      const song: Song = {
+        id: item.track.id,
+        name: item.track.name,
+        artist: item.track.artists.map(a => a.name).join(', '),
+        song_link: item.track.external_urls.spotify,
+        song_metadata: JSON.stringify({
+          album: item.track.album.name,
+          duration_ms: item.track.duration_ms,
+          popularity: item.track.popularity,
+          preview_url: item.track.preview_url
+        }),
+        lyrics
+      };
+      return song;
+    });
 
-        // Fetch lyrics for the song
-        song.lyrics = await getLyrics(song.name, song.artist);
-        return song;
-      })
-    );
+    const songs = await Promise.all(songsPromises);
 
-    allSongs.push(...songsWithLyrics);
+    allSongs.push(...songs);
   }
 
   // Remove duplicates based on song ID
