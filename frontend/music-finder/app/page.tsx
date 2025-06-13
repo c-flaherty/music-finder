@@ -50,6 +50,16 @@ export default function Home() {
 
   useEffect(() => {
     const token = localStorage.getItem('spotify_access_token');
+    const refreshToken = localStorage.getItem('spotify_refresh_token');
+    const expiresAt = localStorage.getItem('spotify_token_expires_at');
+    
+    console.log('Auth state:', {
+      hasAccessToken: !!token,
+      hasRefreshToken: !!refreshToken,
+      expiresAt: expiresAt ? new Date(parseInt(expiresAt)).toISOString() : 'not set',
+      isExpired: expiresAt ? Date.now() > parseInt(expiresAt) : true
+    });
+    
     setIsAuthenticated(!!token);
     setLoading(false);
   }, []);
@@ -60,7 +70,59 @@ export default function Home() {
 
     setIsSearching(true);
     try {
-      const token = localStorage.getItem('spotify_access_token');
+      // Check if token is expired
+      const expiresAt = localStorage.getItem('spotify_token_expires_at');
+      const refreshToken = localStorage.getItem('spotify_refresh_token');
+      let token = localStorage.getItem('spotify_access_token');
+      
+      console.log('Token state before search:', {
+        hasAccessToken: !!token,
+        hasRefreshToken: !!refreshToken,
+        expiresAt: expiresAt ? new Date(parseInt(expiresAt)).toISOString() : 'not set',
+        isExpired: expiresAt ? Date.now() > parseInt(expiresAt) : true
+      });
+      
+      if (expiresAt && Date.now() > parseInt(expiresAt) && !refreshToken) {
+        console.warn('No refresh token, redirecting to Spotify auth');
+        router.push('/api/auth/spotify');
+        return;
+      }
+
+      if (expiresAt && refreshToken && Date.now() > parseInt(expiresAt)) {
+        // Token is expired, try to refresh
+        try {
+          console.log('Attempting to refresh token...');
+          const response = await fetch('/api/spotify/refresh', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ refresh_token: refreshToken }),
+          });
+          
+          if (!response.ok) {
+            throw new Error('Failed to refresh token');
+          }
+          
+          const data = await response.json();
+          token = data.access_token;
+          if (token) {
+            localStorage.setItem('spotify_access_token', token);
+            if (data.refresh_token) {
+              localStorage.setItem('spotify_refresh_token', data.refresh_token);
+            }
+            localStorage.setItem('spotify_token_expires_at', (Date.now() + (data.expires_in * 1000)).toString());
+            console.log('Token refreshed successfully');
+          } else {
+            throw new Error('No access token received from refresh');
+          }
+        } catch (refreshError) {
+          console.error('Error refreshing token:', refreshError);
+          router.push('/?error=unauthorized');
+          return;
+        }
+      }
+
       if (!token) {
         router.push('/?error=unauthorized');
         return;
@@ -70,6 +132,7 @@ export default function Home() {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
+          'Refresh-Token': refreshToken || '',
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ query: search })

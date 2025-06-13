@@ -49,9 +49,26 @@ function LibraryContent() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = searchParams.get('token');
+    const token = searchParams.get('access_token');
+    const refreshToken = searchParams.get('refresh_token');
+    const expiresIn = searchParams.get('expires_in');
+    
+    console.log('Received tokens:', {
+      hasAccessToken: !!token,
+      hasRefreshToken: !!refreshToken,
+      expiresIn: expiresIn
+    });
+    
     if (token) {
       localStorage.setItem('spotify_access_token', token);
+      if (refreshToken) {
+        localStorage.setItem('spotify_refresh_token', refreshToken);
+      }
+      if (expiresIn) {
+        // Store expiration time (current time + expires_in)
+        const expiresAt = Date.now() + (parseInt(expiresIn) * 1000);
+        localStorage.setItem('spotify_token_expires_at', expiresAt.toString());
+      }
       router.replace('/library');
     }
   }, [searchParams, router]);
@@ -61,15 +78,70 @@ function LibraryContent() {
       try {
         setLoading(true);
         setError(null);
-        const token = localStorage.getItem('spotify_access_token');
+        
+        // Check if token is expired
+        const expiresAt = localStorage.getItem('spotify_token_expires_at');
+        const refreshToken = localStorage.getItem('spotify_refresh_token');
+        let token = localStorage.getItem('spotify_access_token');
+        
+        console.log('Token state:', {
+          hasAccessToken: !!token,
+          hasRefreshToken: !!refreshToken,
+          expiresAt: expiresAt ? new Date(parseInt(expiresAt)).toISOString() : 'not set',
+          isExpired: expiresAt ? Date.now() > parseInt(expiresAt) : true
+        });
+        
+        if (expiresAt && refreshToken && Date.now() > parseInt(expiresAt)) {
+          // Token is expired, try to refresh
+          try {
+            console.log('Attempting to refresh token...');
+            const response = await fetch('/api/spotify/refresh', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ refresh_token: refreshToken }),
+            });
+            
+            if (!response.ok) {
+              throw new Error('Failed to refresh token');
+            }
+            
+            const data = await response.json();
+            token = data.access_token;
+            if (token) {
+              localStorage.setItem('spotify_access_token', token);
+              if (data.refresh_token) {
+                localStorage.setItem('spotify_refresh_token', data.refresh_token);
+              }
+              localStorage.setItem('spotify_token_expires_at', (Date.now() + (data.expires_in * 1000)).toString());
+              console.log('Token refreshed successfully');
+            } else {
+              throw new Error('No access token received from refresh');
+            }
+          } catch (refreshError) {
+            console.error('Error refreshing token:', refreshError);
+            router.push('/?error=unauthorized');
+            return;
+          }
+        }
+        
         if (!token) {
           console.error('No access token found in localStorage');
           router.push('/?error=unauthorized');
           return;
         }
+
+        if (!refreshToken) {
+          console.warn('No refresh token found, redirecting to Spotify auth');
+          router.push('/api/auth/spotify');
+          return;
+        }
+
         const response = await fetch('/api/spotify/library', {
           headers: {
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${token}`,
+            'Refresh-Token': refreshToken || ''
           }
         });
         if (!response.ok) {
@@ -154,8 +226,8 @@ function LibraryContent() {
                 <Image
                   src={playlist.images[0].url}
                   alt={playlist.name}
-                  width={64}
-                  height={64}
+                  width={400}
+                  height={192}
                   className="w-full h-48 object-cover"
                 />
               )}

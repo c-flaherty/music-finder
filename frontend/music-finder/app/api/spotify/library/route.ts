@@ -6,13 +6,12 @@ async function refreshAccessToken(refreshToken: string): Promise<string> {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
+      'Authorization': `Basic ${Buffer.from(`${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`).toString('base64')}`
     },
     body: new URLSearchParams({
       grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: process.env.SPOTIFY_CLIENT_ID as string,
-      client_secret: process.env.SPOTIFY_CLIENT_SECRET as string,
-    }),
+      refresh_token: refreshToken
+    })
   });
 
   if (!response.ok) {
@@ -27,13 +26,13 @@ export async function GET(request: Request) {
   console.log('GET request received', request);
   const headersList = await headers();
   const authHeader = headersList.get('authorization');
+  const refreshToken = headersList.get('refresh-token');
   
   if (!authHeader?.startsWith('Bearer ')) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
   let accessToken = authHeader.split(' ')[1];
-  const refreshToken = headersList.get('refresh-token');
   console.log('Refresh token:', refreshToken);
 
   try {
@@ -67,8 +66,7 @@ export async function GET(request: Request) {
     }
 
     if (!response.ok) {
-      // Return a JSON response with a redirect URL
-      return NextResponse.json({ redirect: '/api/auth/spotify' }, { status: 401 });
+      return new NextResponse('Failed to fetch library', { status: response.status });
     }
 
     const data = await response.json();

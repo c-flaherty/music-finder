@@ -40,7 +40,8 @@ export async function GET(request: Request) {
     console.log('Tokens received:', {
       hasAccessToken: !!tokens.access_token,
       hasRefreshToken: !!tokens.refresh_token,
-      expiresIn: tokens.expires_in
+      expiresIn: tokens.expires_in,
+      refreshToken: tokens.refresh_token ? 'present' : 'missing'
     });
 
     if (!tokens.access_token) {
@@ -48,11 +49,19 @@ export async function GET(request: Request) {
       return NextResponse.redirect(new URL('/?error=no_token', request.url));
     }
 
-    // Create a URL with the token as a query parameter
+    // Create a URL with both tokens as query parameters
     const redirectUrl = new URL('/library', request.url);
-    redirectUrl.searchParams.set('token', tokens.access_token);
+    redirectUrl.searchParams.set('access_token', tokens.access_token);
+    if (tokens.refresh_token) {
+      redirectUrl.searchParams.set('refresh_token', tokens.refresh_token);
+    }
+    redirectUrl.searchParams.set('expires_in', tokens.expires_in.toString());
     
-    console.log('Redirecting to library page with token...');
+    console.log('Redirecting to library page with tokens:', {
+      hasAccessToken: true,
+      hasRefreshToken: !!tokens.refresh_token,
+      expiresIn: tokens.expires_in
+    });
     return NextResponse.redirect(redirectUrl);
 
   } catch (error) {
