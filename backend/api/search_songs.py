@@ -45,7 +45,7 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
-@app.post("/api/search-songs")
+@app.post("/api/search_songs")
 async def search_songs_endpoint(search_request: SearchRequest):
     try:
         # Check for LLM API key

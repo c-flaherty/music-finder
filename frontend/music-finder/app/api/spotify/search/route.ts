@@ -229,7 +229,7 @@ async function processPlaylists(playlistsData: any, accessToken: string, query: 
 
   // Send the songs to our search backend
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-  const searchResponse = await fetch(`${apiUrl}/api/search-songs`, {
+  const searchResponse = await fetch(`${apiUrl}/api/search_songs`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
