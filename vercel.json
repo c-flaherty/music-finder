@@ -3,9 +3,17 @@
       {
         "src": "frontend/music-finder/package.json",
         "use": "@vercel/next"
+      },
+      {
+        "src": "backend/api/**/*.py",
+        "use": "@vercel/python"
       }
     ],
     "routes": [
+      {
+        "src": "/api/(.*)",
+        "dest": "backend/api/$1.py"
+      },
       {
         "src": "/(.*)",
         "dest": "frontend/music-finder/$1"
