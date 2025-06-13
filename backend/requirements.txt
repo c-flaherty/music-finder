@@ -1,8 +1,9 @@
-typing-extensions>=4.7.1
-pydantic>=2.0.0
-supabase>=1.0.3
-anthropic>=0.5.0
-openai>=1.0.0
-dataclasses-json>=0.5.7
-python-dotenv>=1.0.0
-vercel-asgi-helper 
+fastapi
+uvicorn
+python-dotenv
+anthropic
+openai
+supabase
+pydantic
+dataclasses-json
+typing-extensions 
