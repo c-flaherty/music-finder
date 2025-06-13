@@ -49,7 +49,10 @@ class handler(BaseHTTPRequestHandler):
             anthropic_key = os.getenv('ANTHROPIC_API_KEY')
             openai_key = os.getenv('OPENAI_API_KEY')
             
+            print(f"Debug - API Keys: Anthropic: {'present' if anthropic_key else 'missing'}, OpenAI: {'present' if openai_key else 'missing'}")
+            
             if not anthropic_key and not openai_key:
+                print("Debug - No API keys found")
                 self.send_response(500)
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.send_header('Content-Type', 'application/json')
@@ -67,7 +70,9 @@ class handler(BaseHTTPRequestHandler):
             
             try:
                 body = json.loads(post_data.decode('utf-8')) if post_data else {}
+                print(f"Debug - Request body: {json.dumps(body, indent=2)}")
             except json.JSONDecodeError as e:
+                print(f"Debug - JSON decode error: {e}")
                 self.send_response(400)
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.send_header('Content-Type', 'application/json')
@@ -81,6 +86,9 @@ class handler(BaseHTTPRequestHandler):
             
             query = body.get('query')
             songs_data = body.get('songs', [])
+            
+            print(f"Debug - Query: {query}")
+            print(f"Debug - Number of songs: {len(songs_data)}")
             
             # Validate request body
             if not query or not isinstance(query, str):
