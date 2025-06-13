@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 
 interface Artist {
@@ -55,7 +56,7 @@ interface PlaylistData {
   };
 }
 
-export default function Playlist() {
+function PlaylistContent() {
   const searchParams = useSearchParams();
   const [authToken, setAuthToken] = useState(searchParams.get('token') || '');
   const [playlistUri, setPlaylistUri] = useState(searchParams.get('uri') || '');
@@ -64,32 +65,7 @@ export default function Playlist() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Auto-fetch playlist if we have both URI and token
-  useEffect(() => {
-    if (authToken && playlistUri) {
-      fetchPlaylist();
-    }
-  }, [authToken, playlistUri]);
-
-  const parseCurlCommand = () => {
-    try {
-      // Extract auth token
-      const authMatch = curlCommand.match(/authorization: Bearer ([^'"]+)/);
-      if (authMatch) {
-        setAuthToken(authMatch[1]);
-      }
-
-      // Extract playlist URI
-      const uriMatch = curlCommand.match(/"uri":"([^"]+)"/);
-      if (uriMatch) {
-        setPlaylistUri(uriMatch[1]);
-      }
-    } catch (err) {
-      setError('Failed to parse cURL command. Please check the format.');
-    }
-  };
-
-  const fetchPlaylist = async () => {
+  const fetchPlaylist = useCallback(async () => {
     if (!authToken) {
       setError('Please provide an auth token');
       return;
@@ -143,6 +119,32 @@ export default function Playlist() {
       setError(err instanceof Error ? err.message : 'Failed to fetch playlist');
     } finally {
       setLoading(false);
+    }
+  }, [authToken, playlistUri]);
+
+  // Auto-fetch playlist if we have both URI and token
+  useEffect(() => {
+    if (authToken && playlistUri) {
+      fetchPlaylist();
+    }
+  }, [authToken, playlistUri, fetchPlaylist]);
+
+  const parseCurlCommand = () => {
+    try {
+      // Extract auth token
+      const authMatch = curlCommand.match(/authorization: Bearer ([^'"]+)/);
+      if (authMatch) {
+        setAuthToken(authMatch[1]);
+      }
+
+      // Extract playlist URI
+      const uriMatch = curlCommand.match(/"uri":"([^"]+)"/);
+      if (uriMatch) {
+        setPlaylistUri(uriMatch[1]);
+      }
+    } catch (error) {
+      console.error('Error parsing cURL command:', error);
+      setError('Failed to parse cURL command. Please check the format.');
     }
   };
 
@@ -203,7 +205,7 @@ export default function Playlist() {
               value={authToken}
               onChange={(e) => setAuthToken(e.target.value)}
               className="w-full p-2 border rounded-lg"
-              placeholder="Enter your Spotify auth token"
+              placeholder="Enter your auth token..."
             />
           </div>
           <div>
@@ -215,56 +217,52 @@ export default function Playlist() {
               value={playlistUri}
               onChange={(e) => setPlaylistUri(e.target.value)}
               className="w-full p-2 border rounded-lg"
-              placeholder="Enter playlist URI"
+              placeholder="Enter your playlist URI..."
             />
           </div>
         </div>
 
-        <button
-          onClick={fetchPlaylist}
-          disabled={loading}
-          className="w-full px-6 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-colors disabled:bg-gray-400"
-        >
-          {loading ? 'Loading...' : 'Fetch Playlist'}
-        </button>
-
+        {/* Error Message */}
         {error && (
-          <div className="mt-4 p-4 bg-red-50 text-red-700 rounded-lg">
+          <div className="mb-8 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
             {error}
           </div>
         )}
 
-        {playlistData?.data?.playlistV2 && (
-          <div className="mt-8">
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold mb-2">{playlistData.data.playlistV2.name}</h2>
-              <p className="text-gray-600">{playlistData.data.playlistV2.description}</p>
-              <p className="text-sm text-gray-500 mt-2">
-                {playlistData.data.playlistV2.content.totalCount} tracks
-              </p>
-            </div>
+        {/* Loading State */}
+        {loading && (
+          <div className="mb-8 p-4 bg-gray-100 rounded-lg">
+            Loading playlist data...
+          </div>
+        )}
 
-            <div className="space-y-4">
+        {/* Playlist Data */}
+        {playlistData && (
+          <div className="space-y-4">
+            <h2 className="text-2xl font-bold">{playlistData.data.playlistV2.name}</h2>
+            <p className="text-gray-600">{playlistData.data.playlistV2.description}</p>
+            <div className="space-y-2">
               {playlistData.data.playlistV2.content.items.map((item, index) => (
-                <div key={index} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
-                  <img
-                    src={item.itemV2.data.albumOfTrack.coverArt.sources[0].url}
-                    alt={item.itemV2.data.albumOfTrack.name}
-                    className="w-16 h-16 rounded"
-                  />
-                  <div className="flex-1">
+                <div key={index} className="flex items-center space-x-4 p-2 bg-gray-50 rounded-lg">
+                  <div className="flex-shrink-0">
+                    {item.itemV2.data.albumOfTrack.coverArt.sources[0] && (
+                      <Image
+                        src={item.itemV2.data.albumOfTrack.coverArt.sources[0].url}
+                        alt={item.itemV2.data.name}
+                        width={40}
+                        height={40}
+                        className="rounded"
+                      />
+                    )}
+                  </div>
+                  <div className="flex-grow">
                     <h3 className="font-medium">{item.itemV2.data.name}</h3>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-gray-500">
                       {item.itemV2.data.artists.items.map(artist => artist.profile.name).join(', ')}
                     </p>
-                    <p className="text-sm text-gray-500">{item.itemV2.data.albumOfTrack.name}</p>
                   </div>
                   <div className="text-sm text-gray-500">
-                    <div>{formatDuration(item.itemV2.data.trackDuration.totalMilliseconds)}</div>
-                    <div>{parseInt(item.itemV2.data.playcount).toLocaleString()} plays</div>
-                    <div className="text-xs">
-                      Added {new Date(item.addedAt.isoString).toLocaleDateString()}
-                    </div>
+                    {formatDuration(item.itemV2.data.trackDuration.totalMilliseconds)}
                   </div>
                 </div>
               ))}
@@ -273,5 +271,13 @@ export default function Playlist() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function Playlist() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <PlaylistContent />
+    </Suspense>
   );
 } 

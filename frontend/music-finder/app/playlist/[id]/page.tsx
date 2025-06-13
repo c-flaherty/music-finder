@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { use } from 'react';
 
 // Add font-face declaration
@@ -160,10 +161,12 @@ export default function PlaylistPage({
         </Link>
         
         <div className="flex items-start gap-8 mb-8">
-          <img 
+          <Image 
             src={playlist.images[0]?.url} 
             alt={playlist.name}
-            className="w-48 h-48 object-cover rounded-lg shadow-lg border border-[#DDCDA8]"
+            width={192}
+            height={192}
+            className="object-cover rounded-lg shadow-lg border border-[#DDCDA8]"
           />
           <div>
             <h1 className="text-4xl font-['Proxima_Nova'] font-extrabold text-[#502D07] mb-2">{playlist.name}</h1>
@@ -175,7 +178,7 @@ export default function PlaylistPage({
         </div>
 
         <div className="space-y-2">
-          {playlist.tracks.items.map((item, index) => (
+          {playlist.tracks.items.map((item) => (
             <a
               key={item.track.id}
               href={item.track.external_urls.spotify}

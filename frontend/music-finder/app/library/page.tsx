@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 
 // Add font-face declaration
 const proximaNovaExtrabold = `
@@ -40,7 +41,7 @@ interface Playlist {
   };
 }
 
-export default function Library() {
+function LibraryContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
@@ -50,9 +51,7 @@ export default function Library() {
   useEffect(() => {
     const token = searchParams.get('token');
     if (token) {
-      // Store token in localStorage
       localStorage.setItem('spotify_access_token', token);
-      // Remove token from URL
       router.replace('/library');
     }
   }, [searchParams, router]);
@@ -62,20 +61,17 @@ export default function Library() {
       try {
         setLoading(true);
         setError(null);
-
         const token = localStorage.getItem('spotify_access_token');
         if (!token) {
           console.error('No access token found in localStorage');
           router.push('/?error=unauthorized');
           return;
         }
-
         const response = await fetch('/api/spotify/library', {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
-
         if (!response.ok) {
           if (response.status === 401) {
             console.error('Unauthorized access');
@@ -84,13 +80,11 @@ export default function Library() {
           }
           throw new Error('Failed to fetch library');
         }
-
         const data = await response.json();
         console.log('Library data received:', {
           hasData: !!data,
           itemCount: data?.items?.length
         });
-
         if (data?.items) {
           setPlaylists(data.items);
         }
@@ -101,7 +95,6 @@ export default function Library() {
         setLoading(false);
       }
     }
-
     fetchLibrary();
   }, [router]);
 
@@ -158,9 +151,11 @@ export default function Library() {
               className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-200 border border-[#DDCDA8]"
             >
               {playlist.images[0] && (
-                <img
+                <Image
                   src={playlist.images[0].url}
                   alt={playlist.name}
+                  width={64}
+                  height={64}
                   className="w-full h-48 object-cover"
                 />
               )}
@@ -175,5 +170,13 @@ export default function Library() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function Library() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <LibraryContent />
+    </Suspense>
   );
 } 

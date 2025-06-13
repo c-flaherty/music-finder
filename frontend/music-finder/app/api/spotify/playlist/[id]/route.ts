@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 
-export async function GET(
-  request: Request,
-  context: { params: { id: string } }
-) {
-  const params = await context.params;
-  const id = params.id;
+export async function GET(request: Request) {
+  // Extract playlist ID from the request URL
+  const url = new URL(request.url);
+  const paths = url.pathname.split('/');
+  const id = paths[paths.length - 2] === 'playlist' ? paths[paths.length - 1] : paths.pop() as string;
+
+  if (!id) {
+    return new NextResponse('Playlist ID not found', { status: 400 });
+  }
+  
   console.log('Playlist API called for ID:', id);
   
   const headersList = await headers();

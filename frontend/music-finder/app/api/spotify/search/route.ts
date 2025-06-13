@@ -1,14 +1,46 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
-import Genius from 'genius-lyrics';
+import { Client as GeniusClient } from 'genius-lyrics';
+
+interface SpotifyArtist {
+  name: string;
+}
+
+interface SpotifyTrack {
+  id: string;
+  name: string;
+  artists: SpotifyArtist[];
+  external_urls: {
+    spotify: string;
+  };
+  album: {
+    name: string;
+  };
+  duration_ms: number;
+  popularity: number;
+  preview_url: string | null;
+}
+
+interface SpotifyTrackItem {
+  track: SpotifyTrack;
+}
+
+interface Song {
+  id: string;
+  name: string;
+  artist: string;
+  song_link: string;
+  song_metadata: string;
+  lyrics: string;
+}
 
 // Initialize Genius client with access token
-const Client = new Genius.Client(process.env.GENIUS_ACCESS_TOKEN);
+const genius = new GeniusClient(process.env.GENIUS_ACCESS_TOKEN);
 
 // Helper function to fetch lyrics
 async function getLyrics(songName: string, artistName: string): Promise<string> {
   try {
-    const searches = await Client.songs.search(`${songName} ${artistName}`);
+    const searches = await genius.songs.search(`${songName} ${artistName}`);
     if (searches.length > 0) {
       const lyrics = await searches[0].lyrics();
       return lyrics;
@@ -51,7 +83,7 @@ export async function POST(request: Request) {
     }
 
     const playlistsData = await playlistsResponse.json();
-    const allSongs: any[] = [];
+    const allSongs: Song[] = [];
 
     // Fetch tracks from each playlist
     for (const playlist of playlistsData.items) {
@@ -71,11 +103,11 @@ export async function POST(request: Request) {
       
       // Process tracks in parallel with lyrics fetching
       const songsWithLyrics = await Promise.all(
-        tracksData.items.map(async (item: any) => {
-          const song = {
+        tracksData.items.map(async (item: SpotifyTrackItem) => {
+          const song: Song = {
             id: item.track.id,
             name: item.track.name,
-            artist: item.track.artists.map((a: any) => a.name).join(', '),
+            artist: item.track.artists.map(a => a.name).join(', '),
             song_link: item.track.external_urls.spotify,
             song_metadata: JSON.stringify({
               album: item.track.album.name,

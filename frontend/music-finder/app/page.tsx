@@ -33,12 +33,19 @@ const chatMessages = [
   { sender: "friend", text: "or cannoli.world" },
 ];
 
+interface SearchResult {
+  id: string;
+  name: string;
+  artist: string;
+  song_link: string;
+}
+
 export default function Home() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
