@@ -185,7 +185,8 @@ async function processPlaylists(playlistsData: any, accessToken: string, query: 
   const uniqueSongs = Array.from(new Map(allSongs.map(song => [song.id, song])).values());
 
   // Send the songs to our search backend
-  const searchResponse = await fetch('/api/search-songs', {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+  const searchResponse = await fetch(`${apiUrl}/api/search-songs`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
