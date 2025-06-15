@@ -20,7 +20,7 @@ music-finder/
 └── README.md
 ```
 
-## Setup Instructions
+## Setup Instructions (DEVELOPMENT)
 
 ### 1. Clone the Repository
 
@@ -36,18 +36,18 @@ cd music-finder
 ```bash
 poetry install
 poetry env activate
+# Now run the "source .." command it outputs. You can rerun "poetry env activate" whenever you want to get this command again.
 ```
-Run the command that is output to activate the environment.
 
 #### Link to vercel
+
+This is needed to pull down env variables. Otherwise, Vercel is updated via pushing code to the remote Github repo.
 
 ```
 npm install -g vercel
 vercel login
 vercel link --project="music-finder"
 ```
-
-#### Environment Variables
 
 The environment variables are stored in Vercel. Linking to Vercel will set them up. Confirm that they are configured correctly with:
 ```
@@ -59,24 +59,22 @@ Also, you probably want to pull them locally for experimentation purposes. Run t
 vercel env pull .env.local
 ```
 
-### 3. Frontend Setup
-
-TODO
-
-## Running the Application
-
-### Start the Backend (Development)
-
-Run from root directory:
+Now startup the backend for development. Run from root directory:
 ```bash
 npx vercel dev --debug
 ```
 
-### Start the Frontend (Development)
+### 3. Frontend Setup
 
-TODO 
+Now you should open up a new terminal. Run the following then (from root directory):
+```
+cd frontend
+npm install
+npm run dev
+# navigate in your browser to the local URL it outputs
+```
 
-## API Endpoints
+## API Endpoints (MAY BE A LITTLE OUT OF DATE)
 
 The backend provides the following API endpoints:
 

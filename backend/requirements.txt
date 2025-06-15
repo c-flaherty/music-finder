@@ -1,9 +1,0 @@
-fastapi
-uvicorn
-python-dotenv
-anthropic
-openai
-supabase
-pydantic
-dataclasses-json
-typing-extensions 
