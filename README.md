@@ -56,6 +56,7 @@ vercel env ls
 
 Also, you probably want to pull them locally for experimentation purposes. Run this from root directory.
 ```
+cd backend
 vercel env pull .env.local
 ```
 
@@ -66,9 +67,23 @@ npx vercel dev --debug
 
 ### 3. Frontend Setup
 
-Now you should open up a new terminal. Run the following then (from root directory):
+Now you should open up a new terminal. 
+
 ```
-cd frontend
+cd frontend/music-finder
+vercel link --project=music-finder-frontend
+vercel env pull .env.local
+```
+
+Now update the following env variables:
+```
+SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000/api/auth/callback
+NEXT_PUBLIC_API_URL=http://localhost:3001
+```
+
+Finally spin up frontend dev server:
+```
+# run from frontend/music-finder
 npm install
 npm run dev
 # navigate in your browser to the local URL it outputs
