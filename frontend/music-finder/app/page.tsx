@@ -1,6 +1,6 @@
 "use client";
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from 'next/navigation';
 import localFont from 'next/font/local';
 
@@ -47,6 +47,10 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [showAuthDropdown, setShowAuthDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+  const askButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
 
   useEffect(() => {
     const token = localStorage.getItem('spotify_access_token');
@@ -63,6 +67,19 @@ export default function Home() {
     setIsAuthenticated(!!token);
     setLoading(false);
   }, []);
+
+  useEffect(() => {
+    if (!showAuthDropdown) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowAuthDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showAuthDropdown]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,6 +168,32 @@ export default function Home() {
     }
   };
 
+  const handleAskClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (!isAuthenticated) {
+      e.preventDefault();
+      setShowAuthDropdown(true);
+      setTimeout(() => {
+        if (askButtonRef.current && dropdownRef.current) {
+          const btnRect = askButtonRef.current.getBoundingClientRect();
+          const formRect = askButtonRef.current.closest('form')?.getBoundingClientRect();
+          const dropdownRect = dropdownRef.current.getBoundingClientRect();
+          if (formRect) {
+            // Center dropdown under button
+            const left = btnRect.left - formRect.left + btnRect.width / 2 - dropdownRect.width / 2;
+            setDropdownStyle({
+              position: 'absolute',
+              left: `${left}px`,
+              top: 'calc(100% + 8px)',
+              zIndex: 20,
+            });
+          }
+        }
+      }, 0);
+    } else {
+      setShowAuthDropdown(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
@@ -165,19 +208,19 @@ export default function Home() {
     <div className={`min-h-screen bg-[#FFF5D1] flex flex-col items-center py-8 md:py-12 px-4 ${roobert.variable} font-roobert`}>
       {/* Header & Hero */}
       <header className="w-full max-w-2xl mx-auto flex flex-col items-center mb-8 md:mb-12">
-        <div className="flex items-center gap-3 mb-4 md:mb-6">
-          <Image src="/logos/cannoli.png" alt="Cannoli logo" width={32} height={32} className="drop-shadow-sm md:w-9 md:h-9" />
-          <span className="text-xl md:text-2xl font-roobert font-bold tracking-tight text-[#502D07]">Cannoli</span>
-        </div>
         <style jsx global>{proximaNovaExtrabold}</style>
         <h1 className="font-roobert text-4xl md:text-5xl lg:text-6xl font-[800] text-[#F6A23B] text-center mb-3 md:mb-4 tracking-tight leading-tight">
-          Ask <span className="text-[#502D07]">Cannoli</span>
+          Remember that song
+          <span className="flex items-center justify-center w-full mt-1 gap-2" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            with <span className="text-[#502D07] ml-2">Cannoli</span>
+            <Image src="/logos/cannoli.png" alt="Cannoli logo" width={64} height={64} className="drop-shadow-sm ml-2 align-middle" />
+          </span>
         </h1>
-        <p className="text-base md:text-lg lg:text-xl text-[#502D07] text-center max-w-xl font-normal mb-6 md:mb-8 px-4">
+        {/* <p className="text-base md:text-lg lg:text-xl text-[#502D07] text-center max-w-xl font-normal mb-6 md:mb-8 px-4">
           What&apos;s that sound? What&apos;s that song about?
-        </p>
+        </p> */}
         {/* Modern Search Bar */}
-        <form onSubmit={handleSearch} className="w-full max-w-xl flex items-center bg-white border border-[#DDCDA8] rounded-2xl shadow-md px-4 md:px-5 py-3 focus-within:ring-2 focus-within:ring-[#F6A23B] transition-all mx-4">
+        <form onSubmit={handleSearch} className="w-full max-w-xl flex items-center bg-white border border-[#DDCDA8] rounded-2xl shadow-md px-4 md:px-5 py-3 focus-within:ring-2 focus-within:ring-[#F6A23B] transition-all mx-4 relative">
           <svg className="w-5 h-5 md:w-6 md:h-6 text-[#838D5A]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" /></svg>
           <input
             type="text"
@@ -185,15 +228,29 @@ export default function Home() {
             placeholder="that song about a roof in New York?"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            disabled={!isAuthenticated}
           />
           <button 
             type="submit"
-            disabled={!isAuthenticated || isSearching}
-            className="ml-2 px-4 md:px-5 py-2 bg-[#01D75E] text-white rounded-xl font-semibold shadow hover:bg-[#01c055] active:bg-[#00b04d] transition-colors font-roobert disabled:bg-gray-400"
+            onClick={handleAskClick}
+            className="ml-2 px-4 md:px-5 py-2 bg-[#01D75E] text-white rounded-xl font-semibold shadow hover:bg-[#01c055] active:bg-[#00b04d] transition-colors font-roobert disabled:bg-gray-400 relative"
+            ref={askButtonRef}
           >
             {isSearching ? 'Searching...' : 'Ask'}
           </button>
+          {showAuthDropdown && !isAuthenticated && (
+            <div ref={dropdownRef} className="absolute flex flex-col items-center" style={dropdownStyle}>
+              {/* Green carrot, centered under button */}
+              <div style={{ width: 0, height: 0, borderLeft: '12px solid transparent', borderRight: '12px solid transparent', borderBottom: '12px solid #01D75E', marginBottom: '-2px' }} />
+              <a 
+                href="/api/auth/spotify"
+                className="flex items-center gap-2 px-5 py-2 bg-[#01D75E] text-white rounded-lg text-base font-semibold shadow-lg hover:bg-[#01c055] active:bg-[#00b04d] transition-colors font-roobert justify-center whitespace-nowrap"
+                style={{ zIndex: 21 }}
+              >
+                <Image src="/spotify/logo.png" alt="Spotify logo" width={20} height={20} className="bg-white rounded-full" />
+                <span>Sign in with Spotify</span>
+              </a>
+            </div>
+          )}
         </form>
       </header>
 
@@ -281,7 +338,7 @@ export default function Home() {
       )}
 
       {/* Auth Button */}
-      <div className="w-full flex justify-center mb-6 md:mb-8 px-4">
+      {/* <div className="w-full flex justify-center mb-6 md:mb-8 px-4">
         {isAuthenticated ? (
           <button
             onClick={() => router.push('/library')}
@@ -299,16 +356,11 @@ export default function Home() {
             <span>Sign in with Spotify</span>
           </a>
         )}
-      </div>
+      </div> */}
 
       {/* Footer */}
       <footer className="w-full flex flex-col items-center gap-3 md:gap-4 pb-2 mt-auto px-4">
-        <div className="flex gap-3 md:gap-4 flex-wrap justify-center">
-          <span className="text-[#502D07] text-xs font-roobert">@cannoliworld</span>
-          <a href="#" className="text-[#502D07] hover:text-[#F6A23B] text-xs font-roobert">Twitter</a>
-          <a href="#" className="text-[#502D07] hover:text-[#4D41E6] text-xs font-roobert">ProductHunt</a>
-        </div>
-        <span className="text-[#838D5A] text-xs font-roobert">Made with ❤️ in SF</span>
+        <span className="text-[#838D5A] text-xs font-roobert">Made with ❤️</span>
       </footer>
     </div>
   );
