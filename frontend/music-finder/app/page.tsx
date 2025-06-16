@@ -81,6 +81,19 @@ export default function Home() {
     };
   }, [showAuthDropdown]);
 
+  useEffect(() => {
+    const handleTouchMove = (e) => {
+      if (e.touches && e.touches.length === 1) {
+        // Only allow vertical scrolling
+        if (Math.abs(e.touches[0].clientX - startX) > 0) {
+          e.preventDefault();
+        }
+      }
+    };
+    document.body.addEventListener('touchmove', handleTouchMove, { passive: false });
+    return () => document.body.removeEventListener('touchmove', handleTouchMove);
+  }, []);
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!search.trim()) return;
@@ -189,8 +202,6 @@ export default function Home() {
           }
         }
       }, 0);
-    } else {
-      setShowAuthDropdown(false);
     }
   };
 
@@ -220,11 +231,11 @@ export default function Home() {
           What&apos;s that sound? What&apos;s that song about?
         </p> */}
         {/* Modern Search Bar */}
-        <form onSubmit={handleSearch} className="w-full max-w-xl flex items-center bg-white border border-[#DDCDA8] rounded-2xl shadow-md px-4 md:px-5 py-3 focus-within:ring-2 focus-within:ring-[#F6A23B] transition-all mx-4 relative">
+        <form onSubmit={handleSearch} className="w-full max-w-xl flex flex-nowrap items-center bg-white border border-[#DDCDA8] rounded-2xl shadow-md px-4 md:px-5 py-3 focus-within:ring-2 focus-within:ring-[#F6A23B] transition-all mx-4 relative">
           <svg className="w-5 h-5 md:w-6 md:h-6 text-[#838D5A]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" /></svg>
           <input
             type="text"
-            className="flex-1 bg-transparent outline-none px-3 py-2 text-base md:text-lg text-[#502D07] placeholder-[#838D5A] font-roobert"
+            className="flex-1 min-w-0 bg-transparent outline-none px-3 py-2 text-base md:text-lg text-[#502D07] placeholder-[#838D5A] font-roobert"
             placeholder="that song about a roof in New York?"
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -232,7 +243,7 @@ export default function Home() {
           <button 
             type="submit"
             onClick={handleAskClick}
-            className="ml-2 px-4 md:px-5 py-2 bg-[#01D75E] text-white rounded-xl font-semibold shadow hover:bg-[#01c055] active:bg-[#00b04d] transition-colors font-roobert disabled:bg-gray-400 relative"
+            className="ml-2 px-4 md:px-5 py-2 bg-[#01D75E] text-white rounded-xl font-semibold shadow hover:bg-[#01c055] active:bg-[#00b04d] transition-colors font-roobert disabled:bg-gray-400 relative flex-shrink-0"
             ref={askButtonRef}
           >
             {isSearching ? 'Searching...' : 'Ask'}
