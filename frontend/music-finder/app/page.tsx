@@ -256,19 +256,42 @@ export default function Home() {
           <button 
             type="submit"
             onClick={handleAskClick}
-            className="ml-2 px-4 md:px-5 py-2 bg-[#01D75E] text-white rounded-xl font-semibold shadow hover:bg-[#01c055] active:bg-[#00b04d] transition-colors font-roobert disabled:bg-gray-400 relative flex-shrink-0"
+            className={`ml-2 px-4 md:px-5 py-2 rounded-xl font-semibold shadow transition-colors font-roobert relative flex-shrink-0 ${!search.trim() ? 'bg-gray-400 text-white' : 'bg-[#01D75E] text-white hover:bg-[#01c055] active:bg-[#00b04d]'}`}
+            disabled={!search.trim()}
             ref={askButtonRef}
           >
             {isSearching ? 'Searching...' : 'Ask'}
           </button>
           {showAuthDropdown && !isAuthenticated && (
-            <div ref={dropdownRef} className="absolute flex flex-col items-center" style={dropdownStyle}>
-              {/* Green carrot, centered under button */}
-              <div style={{ width: 0, height: 0, borderLeft: '12px solid transparent', borderRight: '12px solid transparent', borderBottom: '12px solid #01D75E', marginBottom: '-2px' }} />
-              <a 
+            <div
+              ref={dropdownRef}
+              className="absolute flex flex-col items-center"
+              style={{
+                right: 0,
+                top: 'calc(100% + 8px)',
+                zIndex: 20,
+                minWidth: 0,
+                position: 'absolute',
+              }}
+            >
+              {/* Green carrot, top right of dropdown */}
+              <div
+                style={{
+                  position: 'absolute',
+                  right: 16, // matches dropdown horizontal padding
+                  top: -12,
+                  width: 0,
+                  height: 0,
+                  borderLeft: '12px solid transparent',
+                  borderRight: '12px solid transparent',
+                  borderBottom: '12px solid #01D75E',
+                  zIndex: 21,
+                }}
+              />
+              <a
                 href="/api/auth/spotify"
-                className="flex items-center gap-2 px-5 py-2 bg-[#01D75E] text-white rounded-lg text-base font-semibold shadow-lg hover:bg-[#01c055] active:bg-[#00b04d] transition-colors font-roobert justify-center whitespace-nowrap"
-                style={{ zIndex: 21 }}
+                className="flex items-center gap-2 px-5 py-2 bg-[#01D75E] text-white rounded-lg text-base font-semibold shadow-lg hover:bg-[#01c055] active:bg-[#00b04d] transition-colors font-roobert justify-center whitespace-nowrap relative"
+                style={{ zIndex: 22 }}
               >
                 <Image src="/spotify/logo.png" alt="Spotify logo" width={20} height={20} className="bg-white rounded-full" />
                 <span>Sign in with Spotify</span>
