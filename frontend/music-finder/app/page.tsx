@@ -112,6 +112,30 @@ export default function Home() {
       const params = new URLSearchParams(window.location.search);
       const q = params.get('q');
       if (q) setSearch(q);
+      
+      // Handle tokens from URL after Spotify login
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+      const expiresIn = params.get('expires_in');
+      
+      if (accessToken) {
+        localStorage.setItem('spotify_access_token', accessToken);
+        if (refreshToken) {
+          localStorage.setItem('spotify_refresh_token', refreshToken);
+        }
+        if (expiresIn) {
+          const expiresAt = Date.now() + (parseInt(expiresIn) * 1000);
+          localStorage.setItem('spotify_token_expires_at', expiresAt.toString());
+        }
+        setIsAuthenticated(true);
+        
+        // Clean up URL to remove tokens
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.delete('access_token');
+        newUrl.searchParams.delete('refresh_token');
+        newUrl.searchParams.delete('expires_in');
+        window.history.replaceState({}, '', newUrl.toString());
+      }
     }
   }, []);
 
