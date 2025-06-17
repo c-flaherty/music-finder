@@ -1,10 +1,26 @@
 import os
+import sys
 import requests
 import subprocess
 import json
 from typing import Dict, List, Optional
 import base64
 from http.server import BaseHTTPRequestHandler
+from dataclasses import asdict
+
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))
+
+# Add the search_library directory to Python path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+backend_dir = os.path.dirname(current_dir)
+search_lib_dir = os.path.join(backend_dir, 'search_library')
+sys.path.insert(0, backend_dir)
+
+from search_library.search import search_library
+from search_library.types import Song as SearchSong
+from search_library.clients import get_client
 
 class SpotifyArtist:
     def __init__(self, name: str):
@@ -21,15 +37,6 @@ class SpotifyTrack:
         self.popularity = data['popularity']
         self.preview_url = data['preview_url']
 
-class Song:
-    def __init__(self, id: str, name: str, artist: str, song_link: str, song_metadata: str, lyrics: str):
-        self.id = id
-        self.name = name
-        self.artist = artist
-        self.song_link = song_link
-        self.song_metadata = song_metadata
-        self.lyrics = lyrics
-
 # --------------------------- Lyrics helper ---------------------------
 def get_lyrics(song_name: str, artist_name: str) -> str:
     """Fetch plain-text lyrics from Genius for the given song/artist.
@@ -39,6 +46,7 @@ def get_lyrics(song_name: str, artist_name: str) -> str:
     It is now fully synchronous.
     """
     search_query = f"{song_name} {artist_name}"
+    print(f"[spotify_search] Searching for lyrics for {search_query}")
     
     headers = {
         'accept': '*/*',
@@ -65,6 +73,7 @@ def get_lyrics(song_name: str, artist_name: str) -> str:
     song_url = f"https://api.genius.com/songs/{song_id}?text_format=plain"
     song_response = requests.get(song_url, headers=headers)
     song_data = song_response.json()
+    print(song_data)
     
     return song_data.get('response', {}).get('song', {}).get('lyrics', {}).get('plain', "")
 
@@ -104,11 +113,14 @@ def process_playlists(playlists_data: Dict, access_token: str, query: str):
         tracks_data = tracks_response.json()
         
         for item in tracks_data['items'][:100]:  # safety cap
-            track = SpotifyTrack(item['track'])
+            track_data = item.get('track')
+            if not track_data or not track_data.get('id'):
+                continue
+            track = SpotifyTrack(track_data)
             # Lyrics look-ups are slow; skip by default to prevent timeouts.
-            lyrics = ''
+            lyrics = get_lyrics(track.name, ', '.join(artist.name for artist in track.artists))
             
-            song = Song(
+            song = SearchSong(
                 id=track.id,
                 name=track.name,
                 artist=', '.join(artist.name for artist in track.artists),
@@ -129,46 +141,28 @@ def process_playlists(playlists_data: Dict, access_token: str, query: str):
     # Debug: how many unique songs were collected
     print(f"[spotify_search] Collected {len(unique_songs)} unique tracks from playlists")
 
-    # Option 1: use external search API if configured ---------------------
-    search_api_url = os.getenv('SEARCH_API_URL')
-    if search_api_url:
-        search_response = requests.post(
-            f"{search_api_url}/api/search_songs",
-            json={
-                'query': query,
-                'songs': [vars(song) for song in unique_songs]
-            }
-        )
+    # Check for LLM API key
+    anthropic_key = os.getenv('ANTHROPIC_API_KEY')
+    openai_key = os.getenv('OPENAI_API_KEY')
 
-        if not search_response.ok:
-            raise Exception('Failed to search songs')
+    if not anthropic_key and not openai_key:
+        raise Exception('Missing LLM API configuration.')
 
-        return search_response.json()
-
-    # Option 2: basic local search fallback --------------------------------
-    tokens = [t for t in query.lower().split() if t]
-
-    def song_matches(song: Song) -> bool:
-        haystack = f"{song.name} {song.artist}".lower()
-        return all(tok in haystack for tok in tokens)
-
-    matched = [song for song in unique_songs if song_matches(song)]
-
-    # If nothing matched, return all songs so frontend always shows something
-    if not matched:
-        matched = unique_songs
-
-    # Debug: how many matched locally
-    print(f"[spotify_search] Local search matched {len(matched)} tracks for query '{query}'. Tokens: {tokens}")
+    llm_client = get_client("anthropic-direct") if anthropic_key else get_client("openai-direct")
+    
+    print(f"[spotify_search] Searching with {llm_client.__class__.__name__} for query: '{query}'")
+    search_results = search_library(llm_client, unique_songs, query)
+    
+    results_data = [asdict(song) for song in search_results]
 
     result_dict = {
-        'results': [vars(song) for song in matched]
+        'results': results_data
     }
 
     # Debug: print top few result names to verify content
-    if matched:
-        sample_names = [s.name for s in matched[:5]]
-        print(f"[spotify_search] Returning {len(matched)} results. Sample: {sample_names}")
+    if results_data:
+        sample_names = [s['name'] for s in results_data[:5]]
+        print(f"[spotify_search] Returning {len(results_data)} results. Sample: {sample_names}")
 
     return result_dict
 
