@@ -82,16 +82,25 @@ export default function Home() {
   }, [showAuthDropdown]);
 
   useEffect(() => {
-    const handleTouchMove = (e) => {
+    let startX = 0;
+    const handleTouchStart = (e: TouchEvent) => {
       if (e.touches && e.touches.length === 1) {
-        // Only allow vertical scrolling
+        startX = e.touches[0].clientX;
+      }
+    };
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches && e.touches.length === 1) {
         if (Math.abs(e.touches[0].clientX - startX) > 0) {
           e.preventDefault();
         }
       }
     };
+    document.body.addEventListener('touchstart', handleTouchStart, { passive: false });
     document.body.addEventListener('touchmove', handleTouchMove, { passive: false });
-    return () => document.body.removeEventListener('touchmove', handleTouchMove);
+    return () => {
+      document.body.removeEventListener('touchstart', handleTouchStart);
+      document.body.removeEventListener('touchmove', handleTouchMove);
+    };
   }, []);
 
   const handleSearch = async (e: React.FormEvent) => {
