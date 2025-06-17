@@ -12,6 +12,18 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
   const error = url.searchParams.get('error');
+  const state = url.searchParams.get('state');
+  
+  // Parse state to get q param
+  let q: string | undefined;
+  if (state) {
+    try {
+      const parsed = JSON.parse(state);
+      q = parsed.q ? decodeURIComponent(parsed.q) : undefined;
+    } catch (e) {
+      console.error('Failed to parse state:', e);
+    }
+  }
 
   if (error) {
     console.error('Spotify auth error:', error);
@@ -53,12 +65,17 @@ export async function GET(request: Request) {
     }
 
     // Create a URL with both tokens as query parameters
-    const redirectUrl = new URL('/library', request.url);
+    const redirectUrl = new URL('/', request.url);
     redirectUrl.searchParams.set('access_token', tokens.access_token);
     if (tokens.refresh_token) {
       redirectUrl.searchParams.set('refresh_token', tokens.refresh_token);
     }
     redirectUrl.searchParams.set('expires_in', tokens.expires_in.toString());
+    
+    // If q was in state, forward it
+    if (q) {
+      redirectUrl.searchParams.set('q', q);
+    }
     
     console.log('Redirecting to library page with tokens:', {
       hasAccessToken: true,

@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import localFont from 'next/font/local';
 
 const roobert = localFont({
@@ -42,6 +42,7 @@ interface SearchResult {
 
 export default function Home() {
   const router = useRouter();
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : undefined;
   const [search, setSearch] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -104,6 +105,14 @@ export default function Home() {
       document.body.removeEventListener('touchstart', handleTouchStart);
       document.body.removeEventListener('touchmove', handleTouchMove);
     };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const q = params.get('q');
+      if (q) setSearch(q);
+    }
   }, []);
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -271,7 +280,7 @@ export default function Home() {
                 }}
               />
               <a
-                href="/api/auth/spotify"
+                href={`/api/auth/spotify${search.trim() ? `?q=${encodeURIComponent(search.trim())}` : ''}`}
                 className="flex items-center gap-2 px-5 py-2 bg-[#01D75E] text-white rounded-lg text-base font-semibold shadow-lg hover:bg-[#01c055] active:bg-[#00b04d] transition-colors font-roobert justify-center whitespace-nowrap relative"
                 style={{ zIndex: 22 }}
               >
