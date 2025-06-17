@@ -94,8 +94,8 @@ function LibraryContent() {
         if (expiresAt && refreshToken && Date.now() > parseInt(expiresAt)) {
           // Token is expired, try to refresh
           try {
-            console.log('Attempting to refresh token...');
-            const response = await fetch('/api/spotify/refresh', {
+            const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+            const response = await fetch(`${backendUrl}/api/spotify_refresh.py`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -104,7 +104,11 @@ function LibraryContent() {
             });
             
             if (!response.ok) {
-              throw new Error('Failed to refresh token');
+              localStorage.removeItem('spotify_access_token');
+              localStorage.removeItem('spotify_refresh_token');
+              localStorage.removeItem('spotify_token_expires_at');
+              router.push('/api/auth/spotify');
+              return;
             }
             
             const data = await response.json();
@@ -115,7 +119,6 @@ function LibraryContent() {
                 localStorage.setItem('spotify_refresh_token', data.refresh_token);
               }
               localStorage.setItem('spotify_token_expires_at', (Date.now() + (data.expires_in * 1000)).toString());
-              console.log('Token refreshed successfully');
             } else {
               throw new Error('No access token received from refresh');
             }
@@ -127,8 +130,10 @@ function LibraryContent() {
         }
         
         if (!token) {
-          console.error('No access token found in localStorage');
-          router.push('/?error=unauthorized');
+          localStorage.removeItem('spotify_access_token');
+          localStorage.removeItem('spotify_refresh_token');
+          localStorage.removeItem('spotify_token_expires_at');
+          router.push('/api/auth/spotify');
           return;
         }
 
@@ -138,7 +143,8 @@ function LibraryContent() {
           return;
         }
 
-        const response = await fetch('/api/spotify/library', {
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+        const response = await fetch(`${backendUrl}/api/spotify_library.py`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Refresh-Token': refreshToken || ''
@@ -146,8 +152,10 @@ function LibraryContent() {
         });
         if (!response.ok) {
           if (response.status === 401) {
-            console.error('Unauthorized access');
-            router.push('/?error=unauthorized');
+            localStorage.removeItem('spotify_access_token');
+            localStorage.removeItem('spotify_refresh_token');
+            localStorage.removeItem('spotify_token_expires_at');
+            router.push('/api/auth/spotify');
             return;
           }
           throw new Error('Failed to fetch library');

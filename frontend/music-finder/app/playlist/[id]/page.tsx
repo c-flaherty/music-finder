@@ -74,7 +74,8 @@ export default function PlaylistPage({
           return;
         }
 
-        const response = await fetch(`/api/spotify/playlist/${resolvedParams.id}`, {
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+        const response = await fetch(`${backendUrl}/api/spotify_playlist.py?id=${resolvedParams.id}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
