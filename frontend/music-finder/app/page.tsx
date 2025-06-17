@@ -83,14 +83,18 @@ export default function Home() {
 
   useEffect(() => {
     let startX = 0;
+    let startY = 0;
     const handleTouchStart = (e: TouchEvent) => {
       if (e.touches && e.touches.length === 1) {
         startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
       }
     };
     const handleTouchMove = (e: TouchEvent) => {
       if (e.touches && e.touches.length === 1) {
-        if (Math.abs(e.touches[0].clientX - startX) > 0) {
+        const dx = Math.abs(e.touches[0].clientX - startX);
+        const dy = Math.abs(e.touches[0].clientY - startY);
+        if (dx > dy && dx > 0) {
           e.preventDefault();
         }
       }
