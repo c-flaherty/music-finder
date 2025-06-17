@@ -50,7 +50,6 @@ export default function Home() {
   const [showAuthDropdown, setShowAuthDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const askButtonRef = useRef<HTMLButtonElement | null>(null);
-  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
 
   useEffect(() => {
     const token = localStorage.getItem('spotify_access_token');
@@ -198,23 +197,6 @@ export default function Home() {
     if (!isAuthenticated) {
       e.preventDefault();
       setShowAuthDropdown(true);
-      setTimeout(() => {
-        if (askButtonRef.current && dropdownRef.current) {
-          const btnRect = askButtonRef.current.getBoundingClientRect();
-          const formRect = askButtonRef.current.closest('form')?.getBoundingClientRect();
-          const dropdownRect = dropdownRef.current.getBoundingClientRect();
-          if (formRect) {
-            // Center dropdown under button
-            const left = btnRect.left - formRect.left + btnRect.width / 2 - dropdownRect.width / 2;
-            setDropdownStyle({
-              position: 'absolute',
-              left: `${left}px`,
-              top: 'calc(100% + 8px)',
-              zIndex: 20,
-            });
-          }
-        }
-      }, 0);
     }
   };
 
