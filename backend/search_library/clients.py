@@ -394,7 +394,7 @@ class AnthropicDirectClient(LLMClient):
 class OpenAIDirectClient(LLMClient):
     """Use OpenAI models via first party API."""
 
-    def __init__(self, model_name: str, max_retries=2, cot_model: bool = False):
+    def __init__(self, model_name: str, max_retries=2, cot_model: bool = False, enable_web_search: bool = False):
         """Initialize the OpenAI first party client."""
         api_key = os.getenv("OPENAI_API_KEY")
         self.client = openai.OpenAI(
@@ -404,6 +404,7 @@ class OpenAIDirectClient(LLMClient):
         self.model_name = model_name
         self.max_retries = max_retries
         self.cot_model = cot_model
+        self.enable_web_search = enable_web_search
 
     def generate(
         self,
@@ -477,36 +478,43 @@ class OpenAIDirectClient(LLMClient):
                 raise ValueError(f"Unknown message type: {type(augment_message)}")
             openai_messages.append(openai_message)
 
-        # Turn tool_choice into OpenAI tool_choice format
-        if tool_choice is None:
-            tool_choice_param = OpenAI_NOT_GIVEN
-        elif tool_choice["type"] == "any":
-            tool_choice_param = "required"
-        elif tool_choice["type"] == "auto":
-            tool_choice_param = "auto"
-        elif tool_choice["type"] == "tool":
-            tool_choice_param = {
-                "type": "function",
-                "function": {"name": tool_choice["name"]},
-            }
+        # Handle web search preview
+        if self.enable_web_search and "gpt-4" in self.model_name:
+            # Add web search tool
+            openai_tools = [{"type": "web_search_preview"}]
+            # Force web search tool choice
+            tool_choice_param = {"type": "web_search_preview"}
         else:
-            raise ValueError(f"Unknown tool_choice type: {tool_choice['type']}")
-
-        # Turn tools into OpenAI tool format
-        openai_tools = []
-        if tools is not None:
-            for tool in tools:
-                tool_def = {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": tool.input_schema,
-                }
-                tool_def["parameters"]["strict"] = True
-                openai_tool_object = {
+            # Turn tool_choice into OpenAI tool_choice format
+            if tool_choice is None:
+                tool_choice_param = OpenAI_NOT_GIVEN
+            elif tool_choice["type"] == "any":
+                tool_choice_param = "required"
+            elif tool_choice["type"] == "auto":
+                tool_choice_param = "auto"
+            elif tool_choice["type"] == "tool":
+                tool_choice_param = {
                     "type": "function",
-                    "function": tool_def,
+                    "function": {"name": tool_choice["name"]},
                 }
-                openai_tools.append(openai_tool_object)
+            else:
+                raise ValueError(f"Unknown tool_choice type: {tool_choice['type']}")
+
+            # Turn tools into OpenAI tool format
+            openai_tools = []
+            if tools is not None:
+                for tool in tools:
+                    tool_def = {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "parameters": tool.input_schema,
+                    }
+                    tool_def["parameters"]["strict"] = True
+                    openai_tool_object = {
+                        "type": "function",
+                        "function": tool_def,
+                    }
+                    openai_tools.append(openai_tool_object)
 
         response = None
         for retry in range(self.max_retries):
@@ -597,6 +605,9 @@ def get_client(client_name: str, **kwargs) -> LLMClient:
     if client_name == "anthropic-direct":
         return AnthropicDirectClient(**kwargs)
     elif client_name == "openai-direct":
+        # Default to gpt-4o model for web search support
+        if 'model_name' not in kwargs:
+            kwargs['model_name'] = 'gpt-4o'
         return OpenAIDirectClient(**kwargs)
     else:
         raise ValueError(f"Unknown client name: {client_name}")

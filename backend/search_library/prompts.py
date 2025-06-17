@@ -26,3 +26,12 @@ def decode_assistant_response(response: str) -> list[str]:
             song_ids.append(line.split("<song_id>")[1].split("</song_id>")[0])
     return song_ids
 
+def get_song_metadata_query(song_name: str, artist_names: list[str]) -> str:
+    return f"""
+Here is a song: "{song_name}" by {', '.join(artist_names)}.
+
+Can you provide background info about this song / artist? 
+What is the genre? What time period was it written in? 
+What is the musical movement it comes from? 
+What does it reference? What is its cultural significance?
+"""

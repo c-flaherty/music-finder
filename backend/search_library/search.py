@@ -3,6 +3,20 @@ from .types import Song
 from .clients import LLMClient, TextPrompt
 
 def search_library(client: LLMClient, library: list[Song], user_query: str, n: int = 3, chunk_size: int = 1000, verbose: bool = False) -> list[Song]:
+    """
+    Search the library for songs that match the user's query.
+
+    Args:
+        client: The LLM client to use for the search
+        library: The library of songs to search through
+        user_query: The query to search for
+        n: The number of songs to return
+        chunk_size: The number of songs to search through at once
+        verbose: Whether to print verbose output
+
+    Returns:
+        A list of songs that match the user's query
+    """
     # Break library into chunks of chunk_size songs
     chunks = [library[i:i + chunk_size] for i in range(0, len(library), chunk_size)]
 

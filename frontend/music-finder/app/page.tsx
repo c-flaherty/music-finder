@@ -159,7 +159,7 @@ export default function Home() {
         // Token is expired, try to refresh
         try {
           const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-          const response = await fetch(`${backendUrl}/api/spotify_refresh.py`, {
+          const response = await fetch(`${backendUrl}/api/spotify_refresh`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -203,7 +203,7 @@ export default function Home() {
       }
 
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-      const response = await fetch(`${backendUrl}/api/spotify_search.py`, {
+      const response = await fetch(`${backendUrl}/api/spotify_search`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

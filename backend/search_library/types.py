@@ -1,13 +1,12 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 @dataclass
-class Song:
+class RawSong:
     id: str
     song_link: str
-    song_metadata: str
-    lyrics: str
+    album: str
     name: str
-    artist: str
+    artists: list[str]
 
     def __str__(self):
         return f"""
@@ -20,9 +19,9 @@ Name
 ------------
 {self.name}
 ------------
-Artist
+Artists
 ------------
-{self.artist}
+{', '.join(self.artists)}
 ------------
 Song Link
 ------------
@@ -37,3 +36,8 @@ Lyrics
 {self.lyrics}
 ------------
 """
+    
+@dataclass
+class Song(RawSong):
+    lyrics: str
+    song_metadata: str

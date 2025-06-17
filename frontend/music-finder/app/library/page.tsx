@@ -95,7 +95,7 @@ function LibraryContent() {
           // Token is expired, try to refresh
           try {
             const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-            const response = await fetch(`${backendUrl}/api/spotify_refresh.py`, {
+            const response = await fetch(`${backendUrl}/api/spotify_refresh`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -144,7 +144,7 @@ function LibraryContent() {
         }
 
         const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-        const response = await fetch(`${backendUrl}/api/spotify_library.py`, {
+        const response = await fetch(`${backendUrl}/api/spotify_library`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Refresh-Token': refreshToken || ''
