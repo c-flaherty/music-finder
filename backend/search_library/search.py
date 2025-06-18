@@ -62,15 +62,25 @@ def recursive_search(client: LLMClient, sublibrary: list[Song], user_query: str,
         print("RESPONSE TEXT")
         print(response_text)
 
-    song_ids = decode_assistant_response(response_text)
+    song_reasons = decode_assistant_response(response_text)
 
     if verbose:
-        print("SONG IDS")
-        print(song_ids)
+        print("SONG REASONS")
+        print(song_reasons)
 
-        print("SONGS")
-        print([song for song in sublibrary if song.id in song_ids])
+    # Create a mapping of song IDs to their reasoning
+    id_to_song = {song.id: song for song in sublibrary}
+    result_songs = []
+    for song_id, reason in song_reasons:
+        if song_id in id_to_song:
+            song = id_to_song[song_id]
+            song.reasoning = reason
+            result_songs.append(song)
 
-    return [song for song in sublibrary if song.id in song_ids]
+    if verbose:
+        print("SONGS WITH REASONING")
+        print([(song.name, song.reasoning) for song in result_songs])
+
+    return result_songs
     
     

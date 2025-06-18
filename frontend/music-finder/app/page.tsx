@@ -38,6 +38,7 @@ interface SearchResult {
   name: string;
   artist: string;
   song_link: string;
+  reasoning: string;
 }
 
 export default function Home() {
@@ -338,15 +339,24 @@ export default function Home() {
                   rel="noopener noreferrer"
                   className="block"
                 >
-                  <div className="flex items-center gap-4 p-4 bg-[#FFF5D1] rounded-lg hover:bg-[#DDCDA8] transition-colors cursor-pointer group">
-                    <div className="flex-1">
-                      <h3 className="font-['Proxima_Nova'] font-extrabold text-[#502D07] group-hover:text-[#F6A23B] transition-colors">
-                        {song.name}
-                      </h3>
-                      <p className="text-sm text-[#838D5A]">
-                        {song.artist}
-                      </p>
+                  <div className="flex flex-col gap-3 p-4 bg-[#FFF5D1] rounded-lg hover:bg-[#DDCDA8] transition-colors cursor-pointer group">
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1">
+                        <h3 className="font-['Proxima_Nova'] font-extrabold text-[#502D07] group-hover:text-[#F6A23B] transition-colors">
+                          {song.name}
+                        </h3>
+                        <p className="text-sm text-[#838D5A]">
+                          {song.artist}
+                        </p>
+                      </div>
                     </div>
+                    {song.reasoning && (
+                      <div className="bg-white/50 rounded-lg p-3 border-l-4 border-[#F6A23B]">
+                        <p className="text-sm text-[#502D07] font-medium">
+                          💡 {song.reasoning}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </a>
               ))}

@@ -257,7 +257,14 @@ class handler(BaseHTTPRequestHandler):
             result = search_library(llm_client, enriched_songs, query, n=3, chunk_size=1000)
             
             # Convert Song objects to dictionaries for JSON serialization
-            result_dicts = [asdict(song) for song in result]
+            result_dicts = []
+            for song in result:
+                song_dict = asdict(song)
+                # Convert artists list to single artist string for frontend compatibility
+                song_dict['artist'] = ', '.join(song.artists) if song.artists else ''
+                # Ensure reasoning field is present
+                song_dict['reasoning'] = getattr(song, 'reasoning', '')
+                result_dicts.append(song_dict)
 
             self.send_response(200)
             self._cors()
