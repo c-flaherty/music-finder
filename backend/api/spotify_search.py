@@ -27,6 +27,8 @@ from search_library.clients import TextPrompt
 anthropic_key = os.getenv('ANTHROPIC_API_KEY')
 openai_key = os.getenv('OPENAI_API_KEY')
 
+SET_MAX_SONGS_FORR_DEBUG: int | None = 1
+
 # --------------------------- Lyrics helper ---------------------------
 def get_lyrics(song_name: str, artist_names: list[str]) -> str:
     """Fetch plain-text lyrics from Genius for the given song/artist.
@@ -69,7 +71,7 @@ def get_lyrics(song_name: str, artist_names: list[str]) -> str:
 
 def get_song_metadata(song_name: str, artist_names: list[str]) -> str:
     """Ask LLM with search tool to research the song."""
-    llm_client = get_client("openai-direct", model_name="gpt-4o", enable_web_search=True) # use openai for now because it has built-in web search tool
+    llm_client = get_client("openai-direct", model_name="gpt-4o-mini-search-preview", enable_web_search=True) # use openai for now because it has built-in web search tool
     prompt = get_song_metadata_query(song_name, artist_names)
     response_tuple = llm_client.generate(
         [[TextPrompt(text=prompt)]],  # Note the double brackets
@@ -140,6 +142,12 @@ def get_songs_from_playlists(playlists_data: Dict, access_token: str, query: str
                 album=track_data['album'],
             )
             all_songs.append(track)
+
+            if SET_MAX_SONGS_FORR_DEBUG and len(all_songs) >= SET_MAX_SONGS_FORR_DEBUG:
+                break
+        
+        if SET_MAX_SONGS_FORR_DEBUG and len(all_songs) >= SET_MAX_SONGS_FORR_DEBUG:
+            break
 
     # Remove duplicates
     unique_songs = list({song.id: song for song in all_songs}.values())
@@ -248,12 +256,12 @@ class handler(BaseHTTPRequestHandler):
                 return
 
             playlists_data, access_token = get_playlist_names(access_token, refresh_token)
+            print(f"[spotify_search] Found {len(playlists_data['items'])} playlists")
             raw_songs = get_songs_from_playlists(playlists_data, access_token, query)
+            print(f"[spotify_search] Found {len(raw_songs)} songs")
             enriched_songs = enrich_songs(raw_songs)
             
-            # Create LLM client for search
             llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
-            
             result = search_library(llm_client, enriched_songs, query, n=3, chunk_size=1000)
             
             # Convert Song objects to dictionaries for JSON serialization

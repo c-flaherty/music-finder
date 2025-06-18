@@ -41,4 +41,4 @@ Lyrics
 class Song(RawSong):
     lyrics: str
     song_metadata: str
-    reasoning: str = ""
+    reasoning: str = field(default_factory=lambda: "")

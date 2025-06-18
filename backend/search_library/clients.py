@@ -406,7 +406,7 @@ class OpenAIDirectClient(LLMClient):
         self.cot_model = cot_model
         self.enable_web_search = enable_web_search
         if self.enable_web_search:
-            assert self.model_name == "gpt-4o", "Web search is only supported for gpt-4o"
+            assert self.model_name == "gpt-4o-mini-search-preview", "Web search is only supported for gpt-4o-mini-search-preview"
 
     def generate(
         self,
@@ -525,7 +525,7 @@ class OpenAIDirectClient(LLMClient):
                 response = self.client.chat.completions.create(  # type: ignore
                     model=self.model_name,
                     messages=openai_messages,
-                    temperature=openai_temperature,
+                    # temperature=openai_temperature,
                     tools=openai_tools if len(openai_tools) > 0 else OpenAI_NOT_GIVEN,
                     tool_choice=tool_choice_param,  # type: ignore
                     max_tokens=openai_max_tokens,
