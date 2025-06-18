@@ -259,6 +259,8 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(result).encode())
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             self.send_response(500)
             self._cors()
             self.send_header('Content-Type', 'application/json')

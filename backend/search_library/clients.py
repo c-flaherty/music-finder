@@ -405,6 +405,8 @@ class OpenAIDirectClient(LLMClient):
         self.max_retries = max_retries
         self.cot_model = cot_model
         self.enable_web_search = enable_web_search
+        if self.enable_web_search:
+            assert self.model_name == "gpt-4o", "Web search is only supported for gpt-4o"
 
     def generate(
         self,
@@ -478,43 +480,36 @@ class OpenAIDirectClient(LLMClient):
                 raise ValueError(f"Unknown message type: {type(augment_message)}")
             openai_messages.append(openai_message)
 
-        # Handle web search preview
-        if self.enable_web_search and "gpt-4" in self.model_name:
-            # Add web search tool
-            openai_tools = [{"type": "web_search_preview"}]
-            # Force web search tool choice
-            tool_choice_param = {"type": "web_search_preview"}
+        # Turn tool_choice into OpenAI tool_choice format
+        if tool_choice is None:
+            tool_choice_param = OpenAI_NOT_GIVEN
+        elif tool_choice["type"] == "any":
+            tool_choice_param = "required"
+        elif tool_choice["type"] == "auto":
+            tool_choice_param = "auto"
+        elif tool_choice["type"] == "tool":
+            tool_choice_param = {
+                "type": "function",
+                "function": {"name": tool_choice["name"]},
+            }
         else:
-            # Turn tool_choice into OpenAI tool_choice format
-            if tool_choice is None:
-                tool_choice_param = OpenAI_NOT_GIVEN
-            elif tool_choice["type"] == "any":
-                tool_choice_param = "required"
-            elif tool_choice["type"] == "auto":
-                tool_choice_param = "auto"
-            elif tool_choice["type"] == "tool":
-                tool_choice_param = {
-                    "type": "function",
-                    "function": {"name": tool_choice["name"]},
-                }
-            else:
-                raise ValueError(f"Unknown tool_choice type: {tool_choice['type']}")
+            raise ValueError(f"Unknown tool_choice type: {tool_choice['type']}")
 
-            # Turn tools into OpenAI tool format
-            openai_tools = []
-            if tools is not None:
-                for tool in tools:
-                    tool_def = {
-                        "name": tool.name,
-                        "description": tool.description,
-                        "parameters": tool.input_schema,
-                    }
-                    tool_def["parameters"]["strict"] = True
-                    openai_tool_object = {
-                        "type": "function",
-                        "function": tool_def,
-                    }
-                    openai_tools.append(openai_tool_object)
+        # Turn tools into OpenAI tool format
+        openai_tools = []
+        if tools is not None:
+            for tool in tools:
+                tool_def = {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.input_schema,
+                }
+                tool_def["parameters"]["strict"] = True
+                openai_tool_object = {
+                    "type": "function",
+                    "function": tool_def,
+                }
+                openai_tools.append(openai_tool_object)
 
         response = None
         for retry in range(self.max_retries):
