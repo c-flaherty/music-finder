@@ -154,11 +154,11 @@ def enrich_songs(songs: list[RawSong]) -> list[SearchSong]:
     enriched = []
     for song in songs:
         lyrics = get_lyrics(song.name, song.artists)
-        song_metadata = get_song_metadata(song.name, song.artists)
+        # song_metadata = get_song_metadata(song.name, song.artists)
         enriched_song = SearchSong(
             **song.__dict__,
             lyrics=lyrics,
-            song_metadata=song_metadata
+            song_metadata=""
         )
         enriched.append(enriched_song)
     return enriched
@@ -250,13 +250,20 @@ class handler(BaseHTTPRequestHandler):
             playlists_data, access_token = get_playlist_names(access_token, refresh_token)
             raw_songs = get_songs_from_playlists(playlists_data, access_token, query)
             enriched_songs = enrich_songs(raw_songs)
-            result = search_library(enriched_songs, query, n=3, chunk_size=1000)
+            
+            # Create LLM client for search
+            llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
+            
+            result = search_library(llm_client, enriched_songs, query, n=3, chunk_size=1000)
+            
+            # Convert Song objects to dictionaries for JSON serialization
+            result_dicts = [asdict(song) for song in result]
 
             self.send_response(200)
             self._cors()
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
-            self.wfile.write(json.dumps(result).encode())
+            self.wfile.write(json.dumps(result_dicts).encode())
 
         except Exception as e:
             import traceback
