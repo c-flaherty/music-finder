@@ -6,6 +6,28 @@
       "use": "@vercel/python"
     }
   ],
+  "rewrites": [
+    {
+      "source": "/api/spotify_refresh",
+      "destination": "/api/spotify_refresh.py"
+    },
+    {
+      "source": "/api/spotify_search",
+      "destination": "/api/spotify_search.py"
+    },
+    {
+      "source": "/api/spotify_library",
+      "destination": "/api/spotify_library.py"
+    },
+    {
+      "source": "/api/spotify_playlist",
+      "destination": "/api/spotify_playlist.py"
+    },
+    {
+      "source": "/api/test_ping",
+      "destination": "/api/test_ping.py"
+    }
+  ],
   "headers": [
     {
       "source": "/api/(.*)",
