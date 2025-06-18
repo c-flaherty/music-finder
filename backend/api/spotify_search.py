@@ -162,11 +162,11 @@ def enrich_songs(songs: list[RawSong]) -> list[SearchSong]:
     enriched = []
     for song in songs:
         lyrics = get_lyrics(song.name, song.artists)
-        # song_metadata = get_song_metadata(song.name, song.artists)
+        song_metadata = get_song_metadata(song.name, song.artists)
         enriched_song = SearchSong(
             **song.__dict__,
             lyrics=lyrics,
-            song_metadata=""
+            song_metadata=song_metadata
         )
         enriched.append(enriched_song)
     return enriched
