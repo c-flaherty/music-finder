@@ -206,8 +206,12 @@ export default function Home() {
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [showAuthDropdown, setShowAuthDropdown] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [showProgress, setShowProgress] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const askButtonRef = useRef<HTMLButtonElement | null>(null);
+  const readerRef = useRef<ReadableStreamDefaultReader | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('spotify_access_token');
@@ -301,6 +305,13 @@ export default function Home() {
     if (!search.trim()) return;
 
     setIsSearching(true);
+    setShowProgress(false);
+    setProgress(0);
+    setTotal(0);
+    setSearchResults([]);
+
+    console.log('hi3');
+    
     try {
       // Check if token is expired
       const expiresAt = localStorage.getItem('spotify_token_expires_at');
@@ -315,7 +326,7 @@ export default function Home() {
       if (expiresAt && refreshToken && Date.now() > parseInt(expiresAt)) {
         // Token is expired, try to refresh
         try {
-          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8001';
           const response = await fetch(`${backendUrl}/api/spotify_refresh`, {
             method: 'POST',
             headers: {
@@ -351,48 +362,130 @@ export default function Home() {
         }
       }
 
+      console.log('hi2');
+
       if (!token) {
         localStorage.removeItem('spotify_access_token');
         localStorage.removeItem('spotify_refresh_token');
         localStorage.removeItem('spotify_token_expires_at');
         router.push(`/api/auth/spotify${search.trim() ? `?q=${encodeURIComponent(search.trim())}` : ''}`);
+        console.log('hi5');
         return;
       }
 
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-      const response = await fetch(`${backendUrl}/api/spotify_search`, {
-        method: 'POST',
+      console.log('hi4');
+
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8001';
+      const fetchUrl = `${backendUrl}/api/spotify_search?query=${encodeURIComponent(search)}`;
+      
+      console.log('About to fetch:', {
+        url: fetchUrl,
+        method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Refresh-Token': refreshToken || '',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ query: search })
+        }
       });
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          // Token invalid
-          localStorage.removeItem('spotify_access_token');
-          localStorage.removeItem('spotify_refresh_token');
-          localStorage.removeItem('spotify_token_expires_at');
-          router.push(`/api/auth/spotify${search.trim() ? `?q=${encodeURIComponent(search.trim())}` : ''}`);
-          return;
+      try {
+        const response = await fetch(fetchUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Refresh-Token': refreshToken || '',
+          },
+        });
+
+        console.log('hi - fetch completed with status:', response.status);
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            // Token invalid
+            localStorage.removeItem('spotify_access_token');
+            localStorage.removeItem('spotify_refresh_token');
+            localStorage.removeItem('spotify_token_expires_at');
+            router.push(`/api/auth/spotify${search.trim() ? `?q=${encodeURIComponent(search.trim())}` : ''}`);
+            return;
+          }
+          throw new Error('Search failed');
         }
-        throw new Error('Search failed');
+
+        // Handle streaming response
+        if (!response.body) {
+          throw new Error('No response body');
+        }
+
+        const reader = response.body.getReader();
+        readerRef.current = reader;
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        console.log('Streaming response...');
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            
+            // Process complete SSE messages
+            const messages = buffer.split('\n\n');
+            buffer = messages.pop() || ''; // Keep incomplete message in buffer
+            
+            for (const message of messages) {
+              if (message.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(message.slice(6)); // Remove 'data: ' prefix
+                  
+                  if (data.type === 'progress') {
+                    setProgress(data.processed);
+                    setTotal(data.total);
+                    setShowProgress(true);
+                  } else if (data.type === 'results') {
+                    console.log('Search response data:', data);
+                    console.log('Token usage data:', data.token_usage);
+                    setTokenUsage(data.token_usage || null);
+                    setSearchResults(data.results || []);
+                    setShowProgress(false);
+                  } else if (data.type === 'error') {
+                    console.error('Error:', data);
+                    throw new Error(data.error);
+                  }
+                } catch (parseError) {
+                  console.error('Error parsing SSE message:', parseError);
+                }
+              }
+            }
+          }
+        } finally {
+          reader.releaseLock();
+          readerRef.current = null;
+        }
+
+      } catch (fetchError) {
+        console.error('Fetch error caught:', fetchError);
+        throw fetchError;
       }
 
-      const data = await response.json();
-      console.log('Search response data:', data);
-      console.log('Token usage data:', data.token_usage);
-      setSearchResults(data.results || []);
-      setTokenUsage(data.token_usage || null);
     } catch (error) {
       console.error('Search error:', error);
+      setShowProgress(false);
     } finally {
       setIsSearching(false);
     }
   };
+
+  // Cleanup function for component unmount
+  useEffect(() => {
+    return () => {
+      if (readerRef.current) {
+        readerRef.current.cancel();
+        readerRef.current = null;
+      }
+    };
+  }, []);
 
   const handleAskClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     if (!isAuthenticated) {
@@ -484,6 +577,31 @@ export default function Home() {
         </form>
       </header>
 
+      {/* Progress Bar */}
+      {true && (
+        <section className="w-full max-w-2xl mx-auto mb-6 px-4">
+          <div className="bg-white border border-[#DDCDA8] rounded-2xl shadow-md p-4 md:p-6">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-['Proxima_Nova'] font-extrabold text-[#502D07]">
+                Processing songs...
+              </h3>
+              <span className="text-sm text-[#838D5A] font-roobert">
+                {progress} / {total}
+              </span>
+            </div>
+            <div className="w-full bg-[#F7F7F7] rounded-full h-3 overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-[#01D75E] to-[#01c055] rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${total > 0 ? (progress / total) * 100 : 0}%` }}
+              />
+            </div>
+            <p className="text-xs text-[#838D5A] mt-2 font-roobert">
+              Enriching songs with lyrics and metadata...
+            </p>
+          </div>
+        </section>
+      )}
+
       {/* Search Results */}
       {searchResults.length > 0 && (
         <section className="w-full max-w-2xl mx-auto mb-12 md:mb-20 px-4">
@@ -529,8 +647,8 @@ export default function Home() {
         </section>
       )}
 
-      {/* Chat Messages - Only show when there are no search results */}
-      {searchResults.length === 0 && (
+      {/* Chat Messages - Only show when there are no search results and not searching */}
+      {searchResults.length === 0 && !isSearching && !showProgress && (
         <section className="w-full max-w-md mx-auto mb-8 md:mb-12 px-4">
           <div className="bg-white border border-[#DDCDA8] rounded-2xl shadow-md overflow-hidden h-[600px] flex flex-col">
             {/* iMessage Header */}
