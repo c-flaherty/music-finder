@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import localFont from 'next/font/local';
 
 const roobert = localFont({
@@ -42,6 +42,20 @@ interface SearchResult {
   lyrics: string;
 }
 
+interface TokenUsage {
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_requests: number;
+  requests_breakdown: Array<{
+    chunk_size: number;
+    input_tokens: number;
+    output_tokens: number;
+    final_reduction?: boolean;
+  }>;
+  enrichment_requests?: number;
+  search_requests?: number;
+}
+
 // Lyrics Display Component
 const LyricsDisplay = ({ lyrics }: { lyrics: string }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -74,13 +88,101 @@ const LyricsDisplay = ({ lyrics }: { lyrics: string }) => {
   );
 };
 
+// Token Usage Display Component
+const TokenUsageDisplay = ({ tokenUsage }: { tokenUsage: TokenUsage }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  console.log('TokenUsageDisplay rendered with:', tokenUsage);
+  
+  if (!tokenUsage) {
+    console.log('TokenUsageDisplay: Not showing - no token usage data');
+    return null;
+  }
+  
+  // Show even if total_requests is 0 for debugging
+  if (tokenUsage.total_requests === 0) {
+    console.log('TokenUsageDisplay: Showing with zero requests for debugging');
+  }
+  
+  const totalTokens = tokenUsage.total_input_tokens + tokenUsage.total_output_tokens;
+  
+  return (
+    <div className="bg-white/50 rounded-lg p-3 border-l-4 border-[#838D5A] mb-4">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm text-[#502D07] font-medium">
+          🔍 Search Analytics
+        </p>
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="text-xs text-[#838D5A] hover:text-[#502D07] font-medium transition-colors"
+        >
+          {isExpanded ? 'Show less' : 'Show details'}
+        </button>
+      </div>
+      
+      <div className="text-sm text-[#502D07] space-y-1">
+        <div className="flex justify-between">
+          <span>Total tokens used:</span>
+          <span className="font-medium">{totalTokens.toLocaleString()}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Input tokens:</span>
+          <span>{tokenUsage.total_input_tokens.toLocaleString()}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Output tokens:</span>
+          <span>{tokenUsage.total_output_tokens.toLocaleString()}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>LLM requests:</span>
+          <span>{tokenUsage.total_requests}</span>
+        </div>
+        {tokenUsage.enrichment_requests !== undefined && tokenUsage.search_requests !== undefined && (
+          <>
+            <div className="flex justify-between">
+              <span>• Enrichment requests:</span>
+              <span>{tokenUsage.enrichment_requests}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>• Search requests:</span>
+              <span>{tokenUsage.search_requests}</span>
+            </div>
+          </>
+        )}
+        {tokenUsage.total_requests === 0 && (
+          <div className="text-xs text-[#838D5A] italic mt-2">
+            No LLM requests were made (songs may have been cached)
+          </div>
+        )}
+      </div>
+      
+      {isExpanded && tokenUsage.requests_breakdown.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-[#DDCDA8]">
+          <p className="text-xs text-[#502D07] font-medium mb-2">Request Breakdown:</p>
+          <div className="space-y-1">
+            {tokenUsage.requests_breakdown.map((request, index) => (
+              <div key={index} className="text-xs text-[#502D07] flex justify-between">
+                <span>
+                  {request.final_reduction ? 'Final reduction' : `Chunk ${index + 1}`} 
+                  ({request.chunk_size} songs)
+                </span>
+                <span>{request.input_tokens + request.output_tokens} tokens</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function Home() {
   const router = useRouter();
-  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : undefined;
   const [search, setSearch] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [showAuthDropdown, setShowAuthDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
@@ -260,7 +362,10 @@ export default function Home() {
       }
 
       const data = await response.json();
+      console.log('Search response data:', data);
+      console.log('Token usage data:', data.token_usage);
       setSearchResults(data.results || []);
+      setTokenUsage(data.token_usage || null);
     } catch (error) {
       console.error('Search error:', error);
     } finally {
@@ -363,6 +468,10 @@ export default function Home() {
         <section className="w-full max-w-2xl mx-auto mb-12 md:mb-20 px-4">
           <div className="bg-white border border-[#DDCDA8] rounded-2xl shadow-md p-4 md:p-6">
             <h2 className="text-xl font-['Proxima_Nova'] font-extrabold text-[#502D07] mb-4">Search Results</h2>
+            
+            {/* Token Usage Display */}
+            {tokenUsage && <TokenUsageDisplay tokenUsage={tokenUsage} />}
+            
             <div className="space-y-4">
               {searchResults.map((song) => (
                 <a

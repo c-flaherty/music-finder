@@ -13,18 +13,24 @@ Here is the user's query:
 
 Which {n} songs in the library best match the user's query?
 
+IMPORTANT: Search through the lyrics carefully for exact phrase matches. If the user is looking for a specific lyric, prioritize songs that contain that exact phrase or very close variations.
+
 For each song you select, provide a brief explanation of why it matches the query. Consider the lyrics, title, artist, and any other relevant information.
 
 Rank songs with direct lyric or title matches above those with only thematic or emotional relevance.
 If any song contains the exact phrase or a very close match to the user's query in its lyrics or title, list it first.
 
+CRITICAL: Use the EXACT song ID numbers from the library above. Do not make up IDs or use generic numbers.
+
 Return the songs in the following format, ordered from most relevant to least relevant:
-<song_id>song id 1</song_id>
+<song_id>EXACT_ID_FROM_LIBRARY</song_id>
 <reason>brief explanation of why this song matches the query</reason>
-<song_id>song id 2</song_id>
+<song_id>EXACT_ID_FROM_LIBRARY</song_id>
 <reason>brief explanation of why this song matches the query</reason>
-<song_id>song id 3</song_id>
+<song_id>EXACT_ID_FROM_LIBRARY</song_id>
 <reason>brief explanation of why this song matches the query</reason>
+
+Example: If a song has ID "12345" in the library, use <song_id>12345</song_id>
 """
 
 def decode_assistant_response(response: str) -> list[tuple[str, str]]:

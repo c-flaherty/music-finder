@@ -32,7 +32,7 @@ openai_key = os.getenv('OPENAI_API_KEY')
 supabase_url = os.getenv('SUPABASE_URL')
 supabase_service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
-SET_MAX_SONGS_FORR_DEBUG: int | None = 1
+SET_MAX_SONGS_FORR_DEBUG: int | None = 10
 
 # --------------------------- Lyrics helper ---------------------------
 def get_lyrics(song_name: str, artist_names: list[str]) -> str:
@@ -95,7 +95,7 @@ def get_lyrics(song_name: str, artist_names: list[str]) -> str:
     
     return lyrics
 
-def get_song_metadata(song_name: str, artist_names: list[str]) -> str:
+def get_song_metadata(song_name: str, artist_names: list[str]) -> tuple[str, dict]:
     """Ask LLM with search tool to research the song."""
     llm_client = get_client("openai-direct", model_name="gpt-4o-mini-search-preview", enable_web_search=True) # use openai for now because it has built-in web search tool
     prompt = get_song_metadata_query(song_name, artist_names)
@@ -106,14 +106,23 @@ def get_song_metadata(song_name: str, artist_names: list[str]) -> str:
     response_blocks = response_tuple[0]  # This is list[AssistantContentBlock]
     first_block = response_blocks[0]     # This is the first AssistantContentBlock
     response_text = first_block.text     # This is the text content
-    return response_text
+    
+    # Extract token usage from metadata
+    token_usage = response_tuple[1] if len(response_tuple) > 1 else {}
+    
+    return response_text, token_usage
 
 def refresh_access_token(refresh_token: str) -> str:
+    client_id = os.getenv('SPOTIFY_CLIENT_ID')
+    client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
+    credentials = f"{client_id}:{client_secret}"
+    encoded_credentials = base64.b64encode(credentials.encode()).decode()
+    
     response = requests.post(
         'https://accounts.spotify.com/api/token',
         headers={
             'Content-Type': 'application/x-www-form-urlencoded',
-            'Authorization': f"Basic {base64.b64encode(f'{os.getenv('SPOTIFY_CLIENT_ID')}:{os.getenv('SPOTIFY_CLIENT_SECRET')}'.encode()).decode()}"
+            'Authorization': f"Basic {encoded_credentials}"
         },
         data={
             'grant_type': 'refresh_token',
@@ -183,20 +192,25 @@ def get_songs_from_playlists(playlists_data: Dict, access_token: str, query: str
 
     return unique_songs
 
-def enrich_songs(songs: list[RawSong]) -> list[SearchSong]:
+def enrich_songs(songs: list[RawSong]) -> tuple[list[SearchSong], dict]:
     """Enrich raw songs with lyrics and metadata in parallel."""
     enriched = []
+    total_enrichment_tokens = {
+        'total_input_tokens': 0,
+        'total_output_tokens': 0,
+        'total_requests': 0
+    }
     
-    def enrich_single_song(song: RawSong) -> SearchSong:
+    def enrich_single_song(song: RawSong) -> tuple[SearchSong, dict]:
         """Enrich a single song with lyrics and metadata."""
         try:
             lyrics = get_lyrics(song.name, song.artists)
-            song_metadata = get_song_metadata(song.name, song.artists)
+            song_metadata, token_usage = get_song_metadata(song.name, song.artists)
             return SearchSong(
                 **song.__dict__,
                 lyrics=lyrics,
                 song_metadata=song_metadata
-            )
+            ), token_usage
         except Exception as e:
             print(f"Error enriching song {song.name}: {e}")
             # Return song with empty lyrics/metadata on error
@@ -204,13 +218,13 @@ def enrich_songs(songs: list[RawSong]) -> list[SearchSong]:
                 **song.__dict__,
                 lyrics="",
                 song_metadata=""
-            )
+            ), {}
     
     # Process songs in parallel with a reasonable number of workers
     if len(songs) == 0:
-        return []
+        return [], total_enrichment_tokens
     
-    max_workers = min(50, len(songs))  # Cap at 10 concurrent requests
+    max_workers = min(100, len(songs))  # Cap at 10 concurrent requests
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all enrichment tasks
         future_to_song = {executor.submit(enrich_single_song, song): song for song in songs}
@@ -218,8 +232,13 @@ def enrich_songs(songs: list[RawSong]) -> list[SearchSong]:
         # Collect results as they complete
         for future in as_completed(future_to_song):
             try:
-                enriched_song = future.result()
+                enriched_song, token_usage = future.result()
                 enriched.append(enriched_song)
+                
+                # Aggregate token usage
+                total_enrichment_tokens['total_input_tokens'] += token_usage.get('input_tokens', 0)
+                total_enrichment_tokens['total_output_tokens'] += token_usage.get('output_tokens', 0)
+                total_enrichment_tokens['total_requests'] += 1
             except Exception as e:
                 song = future_to_song[future]
                 print(f"Error processing song {song.name}: {e}")
@@ -230,7 +249,7 @@ def enrich_songs(songs: list[RawSong]) -> list[SearchSong]:
                     song_metadata=""
                 ))
     
-    return enriched
+    return enriched, total_enrichment_tokens
 
 def get_playlist_names(access_token: str, refresh_token: Optional[str] = None) -> tuple[Dict, str]:
     """
@@ -423,7 +442,7 @@ class handler(BaseHTTPRequestHandler):
             print(f"[spotify_search] Found {len(raw_songs)} total songs")
             
             # Only enrich unprocessed songs
-            newly_enriched_songs = enrich_songs(unprocessed_raw_songs)
+            newly_enriched_songs, enrichment_token_usage = enrich_songs(unprocessed_raw_songs)
             
             # Save newly enriched songs to database
             save_enriched_songs_to_db(newly_enriched_songs)
@@ -432,7 +451,22 @@ class handler(BaseHTTPRequestHandler):
             all_enriched_songs = already_processed_enriched_songs + newly_enriched_songs
             
             llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
-            result = search_library(llm_client, all_enriched_songs, query, n=3, chunk_size=250, verbose=True)
+            result, search_token_usage = search_library(llm_client, all_enriched_songs, query, n=3, chunk_size=250, verbose=True)
+            
+            # Combine token usage from both processes
+            combined_token_usage = {
+                'total_input_tokens': search_token_usage.get('total_input_tokens', 0) + enrichment_token_usage.get('total_input_tokens', 0),
+                'total_output_tokens': search_token_usage.get('total_output_tokens', 0) + enrichment_token_usage.get('total_output_tokens', 0),
+                'total_requests': search_token_usage.get('total_requests', 0) + enrichment_token_usage.get('total_requests', 0),
+                'requests_breakdown': search_token_usage.get('requests_breakdown', []),
+                'enrichment_requests': enrichment_token_usage.get('total_requests', 0),
+                'search_requests': search_token_usage.get('total_requests', 0)
+            }
+            
+            print(f"[spotify_search] Token usage summary:")
+            print(f"  Enrichment: {enrichment_token_usage}")
+            print(f"  Search: {search_token_usage}")
+            print(f"  Combined: {combined_token_usage}")
             
             # Convert Song objects to dictionaries for JSON serialization
             result_dicts = []
@@ -448,7 +482,10 @@ class handler(BaseHTTPRequestHandler):
             self._cors()
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
-            self.wfile.write(json.dumps({'results': result_dicts}).encode())
+            self.wfile.write(json.dumps({
+                'results': result_dicts,
+                'token_usage': combined_token_usage
+            }).encode())
 
         except Exception as e:
             import traceback
