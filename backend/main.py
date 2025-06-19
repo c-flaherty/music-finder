@@ -203,8 +203,8 @@ def enrich_songs(songs: list[RawSong], progress_callback=None) -> list[SearchSon
                 print(f"Error processing song {song.name}: {e}")
                 enriched.append(SearchSong(
                     **song.__dict__,
-                    lyrics="",
-                    song_metadata=""
+                    lyrics="these are some lyrics",
+                    song_metadata="this is a song deep-dive"
                 ))
             
             processed_count += 1
@@ -596,7 +596,7 @@ async def spotify_search(
             
             # Search through the enriched songs using LLM
             llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
-            result = search_library(llm_client, all_enriched_songs, query, n=3, chunk_size=250, verbose=True)
+            relevant_songs, token_usage = search_library(llm_client, all_enriched_songs, query, n=3, chunk_size=250, verbose=True)
             
             print(f"[spotify_search] Done searching")
             
@@ -610,7 +610,7 @@ async def spotify_search(
             
             # Convert Song objects to dictionaries for JSON serialization
             result_dicts = []
-            for song in result:
+            for song in relevant_songs:
                 song_dict = asdict(song)
                 # Convert artists list to single artist string for frontend compatibility
                 song_dict['artist'] = ', '.join(song.artists) if song.artists else ''
@@ -621,7 +621,8 @@ async def spotify_search(
             # Emit final results
             final_data = {
                 'type': 'results',
-                'results': result_dicts
+                'results': [asdict(song) for song in relevant_songs],
+                'token_usage': token_usage
             }
             yield f"data: {json.dumps(final_data)}\n\n"
             print(f"[spotify_search] Done streaming")
