@@ -24,10 +24,14 @@ from search_library.clients import get_client
 from search_library.prompts import get_song_metadata_query
 from search_library.clients import TextPrompt
 
+from supabase import create_client, Client
+
 anthropic_key = os.getenv('ANTHROPIC_API_KEY')
 openai_key = os.getenv('OPENAI_API_KEY')
+supabase_url = os.getenv('SUPABASE_URL')
+supabase_service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
-SET_MAX_SONGS_FORR_DEBUG: int | None = 1
+SET_MAX_SONGS_FORR_DEBUG: int | None = 5
 
 # --------------------------- Lyrics helper ---------------------------
 def get_lyrics(song_name: str, artist_names: list[str]) -> str:
@@ -139,7 +143,7 @@ def get_songs_from_playlists(playlists_data: Dict, access_token: str, query: str
                 song_link=track_data['external_urls']['spotify'],
                 name=track_data['name'],
                 artists=[artist['name'] for artist in track_data['artists']],
-                album=track_data['album'],
+                album=track_data['album']['name'],
             )
             all_songs.append(track)
 
@@ -210,6 +214,104 @@ def get_playlist_names(access_token: str, refresh_token: Optional[str] = None) -
 
     return playlists_response.json(), access_token
 
+def fetch_already_processed_enriched_songs(raw_songs: list[RawSong]) -> tuple[list[SearchSong], list[RawSong]]:
+    """Fetch already processed enriched songs from the database.
+    
+    Args:
+        raw_songs: The raw songs to fetch already processed enriched songs for
+
+    Returns:
+        A tuple of (already_processed_enriched_songs, unprocessed_enriched_songs)
+    """
+    
+
+    supabase: Client = create_client(supabase_url, supabase_service_key)
+
+    already_processed_enriched_songs = []
+    unprocessed_enriched_songs = []
+    
+    # Get all song IDs from raw_songs
+    song_ids = [song.id for song in raw_songs]
+    
+    if not song_ids:
+        return ([], [])
+    
+    try:
+        # Query the database for all songs with matching IDs
+        response = supabase.table('songs').select('*').in_('id', song_ids).execute()
+        
+        # Create a dictionary of processed songs by ID for quick lookup
+        processed_songs_dict = {song['id']: song for song in response.data}
+        
+        # Iterate through raw songs and categorize them
+        for raw_song in raw_songs:
+            if raw_song.id in processed_songs_dict:
+                # Song is already processed, convert database record to SearchSong
+                db_song = processed_songs_dict[raw_song.id]
+                
+                # Convert comma-delimited artists string back to list
+                artists_list = [artist.strip() for artist in db_song['artists'].split(',')]
+                
+                enriched_song = SearchSong(
+                    id=db_song['id'],
+                    name=db_song['name'],
+                    artists=artists_list,
+                    album=db_song['album'],
+                    song_link=db_song['song_link'],
+                    lyrics=db_song.get('lyrics', ''),
+                    song_metadata=db_song.get('song_metadata', '')
+                )
+                already_processed_enriched_songs.append(enriched_song)
+            else:
+                # Song is not processed yet
+                unprocessed_enriched_songs.append(raw_song)
+        
+        print(f"[spotify_search] Found {len(already_processed_enriched_songs)} already processed songs in database")
+        print(f"[spotify_search] Found {len(unprocessed_enriched_songs)} unprocessed songs")
+        
+    except Exception as e:
+        print(f"[spotify_search] Error fetching from database: {str(e)}")
+        # If there's an error, treat all songs as unprocessed
+        return ([], raw_songs)
+    
+    return (already_processed_enriched_songs, unprocessed_enriched_songs)
+
+def save_enriched_songs_to_db(enriched_songs: list[SearchSong]) -> None:
+    """Save enriched songs to the database.
+    
+    Args:
+        enriched_songs: List of enriched songs to save
+    """
+    if not enriched_songs:
+        return
+    
+    supabase: Client = create_client(supabase_url, supabase_service_key)
+    
+    try:
+        # Prepare data for batch insert
+        songs_data = []
+        for song in enriched_songs:
+            # Convert artists list to comma-delimited string
+            artists_str = ', '.join(song.artists)
+            
+            song_data = {
+                'id': song.id,
+                'name': song.name,
+                'artists': artists_str,
+                'album': song.album,
+                'song_link': song.song_link,
+                'lyrics': song.lyrics,
+                'song_metadata': song.song_metadata
+            }
+            songs_data.append(song_data)
+        
+        # Insert songs into database (upsert to handle potential duplicates)
+        response = supabase.table('songs').upsert(songs_data).execute()
+        print(f"[spotify_search] Successfully saved {len(songs_data)} songs to database")
+        
+    except Exception as e:
+        print(f"[spotify_search] Error saving songs to database: {str(e)}")
+
 class handler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
     def _cors(self):
@@ -258,11 +360,22 @@ class handler(BaseHTTPRequestHandler):
             playlists_data, access_token = get_playlist_names(access_token, refresh_token)
             print(f"[spotify_search] Found {len(playlists_data['items'])} playlists")
             raw_songs = get_songs_from_playlists(playlists_data, access_token, query)
-            print(f"[spotify_search] Found {len(raw_songs)} songs")
-            enriched_songs = enrich_songs(raw_songs)
+            
+            already_processed_enriched_songs, unprocessed_raw_songs = fetch_already_processed_enriched_songs(raw_songs)
+            
+            print(f"[spotify_search] Found {len(raw_songs)} total songs")
+            
+            # Only enrich unprocessed songs
+            newly_enriched_songs = enrich_songs(unprocessed_raw_songs)
+            
+            # Save newly enriched songs to database
+            save_enriched_songs_to_db(newly_enriched_songs)
+            
+            # Combine already processed and newly enriched songs
+            all_enriched_songs = already_processed_enriched_songs + newly_enriched_songs
             
             llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
-            result = search_library(llm_client, enriched_songs, query, n=3, chunk_size=1000)
+            result = search_library(llm_client, all_enriched_songs, query, n=3, chunk_size=1000)
             
             # Convert Song objects to dictionaries for JSON serialization
             result_dicts = []
