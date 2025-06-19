@@ -45,7 +45,8 @@ def get_lyrics(song_name: str, artist_names: list[str]) -> str:
     search_query = f"{song_name} {', '.join(artist_names)}"
     print(f"[spotify_search] Searching for lyrics for {search_query}")
     
-    headers = {
+    # Headers for the initial search request
+    search_headers = {
         'accept': '*/*',
         'content-type': 'application/json',
         'x-genius-ios-version': '7.7.0',
@@ -54,27 +55,36 @@ def get_lyrics(song_name: str, artist_names: list[str]) -> str:
         'user-agent': 'Genius/1267 CFNetwork/3826.500.131 Darwin/24.5.0'
     }
     
-    if os.getenv('GENIUS_ACCESS_TOKEN'):
-        headers['Authorization'] = f"Bearer {os.getenv('GENIUS_ACCESS_TOKEN')}"
+    genius_token = os.getenv('GENIUS_ACCESS_TOKEN')
+    if genius_token:
+        search_headers['Authorization'] = f"Bearer {genius_token}"
 
     # Search for the song
     search_url = f"https://api.genius.com/search?q={search_query}"
-    print(f"[spotify_search] Searching for lyrics for {search_query} at {search_url}")
-    search_response = requests.get(search_url, headers=headers)
+    search_response = requests.get(search_url, headers=search_headers)
     search_data = search_response.json()
     
     song_id = search_data.get('response', {}).get('hits', [{}])[0].get('result', {}).get('id')
     if not song_id:
         print(f"[spotify_search] No song ID found for {search_query}")
         return ""
-    else:
-        print(f"[spotify_search] Found song ID {song_id} for {search_query}")
+    
+    print(f"[spotify_search] Found song ID {song_id} for {search_query}")
+
+    # Headers for the song details request (no Authorization)
+    song_headers = {
+        'accept': '*/*',
+        'content-type': 'application/json',
+        'x-genius-ios-version': '7.7.0',
+        'x-genius-logged-out': 'true',
+        'accept-language': 'en-US,en;q=0.9',
+        'user-agent': 'Genius/1267 CFNetwork/3826.500.131 Darwin/24.5.0'
+    }
 
     # Get song details
-    song_url = f"https://api.genius.com/songs/{song_id}?text_format=plain"
-    song_response = requests.get(song_url, headers=headers)
+    song_url = f"https://api.genius.com/songs/{song_id}?text_format=plain,dom"
+    song_response = requests.get(song_url, headers=song_headers)
     song_data = song_response.json()
-    print(song_data)
     
     lyrics = song_data.get('response', {}).get('song', {}).get('lyrics', {}).get('plain', "")
     
@@ -197,6 +207,9 @@ def enrich_songs(songs: list[RawSong]) -> list[SearchSong]:
             )
     
     # Process songs in parallel with a reasonable number of workers
+    if len(songs) == 0:
+        return []
+    
     max_workers = min(50, len(songs))  # Cap at 10 concurrent requests
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all enrichment tasks
