@@ -54,6 +54,10 @@ interface TokenUsage {
   }>;
   enrichment_requests?: number;
   search_requests?: number;
+  enrichment_input_tokens?: number;
+  enrichment_output_tokens?: number;
+  search_input_tokens?: number;
+  search_output_tokens?: number;
 }
 
 // Lyrics Display Component
@@ -146,6 +150,23 @@ const TokenUsageDisplay = ({ tokenUsage }: { tokenUsage: TokenUsage }) => {
             <div className="flex justify-between">
               <span>• Search requests:</span>
               <span>{tokenUsage.search_requests}</span>
+            </div>
+          </>
+        )}
+        {tokenUsage.enrichment_input_tokens !== undefined && tokenUsage.search_input_tokens !== undefined && (
+          <>
+            <div className="mt-2 pt-2 border-t border-[#DDCDA8]">
+              <div className="text-xs text-[#502D07] font-medium mb-1">Token Breakdown:</div>
+              <div className="text-xs text-[#502D07] space-y-1">
+                <div className="flex justify-between">
+                  <span>Enrichment tokens:</span>
+                  <span>{((tokenUsage.enrichment_input_tokens || 0) + (tokenUsage.enrichment_output_tokens || 0)).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Search tokens:</span>
+                  <span>{((tokenUsage.search_input_tokens || 0) + (tokenUsage.search_output_tokens || 0)).toLocaleString()}</span>
+                </div>
+              </div>
             </div>
           </>
         )}

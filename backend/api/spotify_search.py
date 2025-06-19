@@ -460,7 +460,11 @@ class handler(BaseHTTPRequestHandler):
                 'total_requests': search_token_usage.get('total_requests', 0) + enrichment_token_usage.get('total_requests', 0),
                 'requests_breakdown': search_token_usage.get('requests_breakdown', []),
                 'enrichment_requests': enrichment_token_usage.get('total_requests', 0),
-                'search_requests': search_token_usage.get('total_requests', 0)
+                'search_requests': search_token_usage.get('total_requests', 0),
+                'enrichment_input_tokens': enrichment_token_usage.get('total_input_tokens', 0),
+                'enrichment_output_tokens': enrichment_token_usage.get('total_output_tokens', 0),
+                'search_input_tokens': search_token_usage.get('total_input_tokens', 0),
+                'search_output_tokens': search_token_usage.get('total_output_tokens', 0)
             }
             
             print(f"[spotify_search] Token usage summary:")
