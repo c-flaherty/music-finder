@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 import base64
 from http.server import BaseHTTPRequestHandler
 from dataclasses import asdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
@@ -31,7 +32,7 @@ openai_key = os.getenv('OPENAI_API_KEY')
 supabase_url = os.getenv('SUPABASE_URL')
 supabase_service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
-SET_MAX_SONGS_FORR_DEBUG: int | None = 5
+SET_MAX_SONGS_FORR_DEBUG: int | None = 1
 
 # --------------------------- Lyrics helper ---------------------------
 def get_lyrics(song_name: str, artist_names: list[str]) -> str:
@@ -58,12 +59,16 @@ def get_lyrics(song_name: str, artist_names: list[str]) -> str:
 
     # Search for the song
     search_url = f"https://api.genius.com/search?q={search_query}"
+    print(f"[spotify_search] Searching for lyrics for {search_query} at {search_url}")
     search_response = requests.get(search_url, headers=headers)
     search_data = search_response.json()
     
     song_id = search_data.get('response', {}).get('hits', [{}])[0].get('result', {}).get('id')
     if not song_id:
+        print(f"[spotify_search] No song ID found for {search_query}")
         return ""
+    else:
+        print(f"[spotify_search] Found song ID {song_id} for {search_query}")
 
     # Get song details
     song_url = f"https://api.genius.com/songs/{song_id}?text_format=plain"
@@ -71,7 +76,14 @@ def get_lyrics(song_name: str, artist_names: list[str]) -> str:
     song_data = song_response.json()
     print(song_data)
     
-    return song_data.get('response', {}).get('song', {}).get('lyrics', {}).get('plain', "")
+    lyrics = song_data.get('response', {}).get('song', {}).get('lyrics', {}).get('plain', "")
+    
+    # Truncate lyrics to 1600 characters if they're too long
+    if len(lyrics) > 1600:
+        lyrics = lyrics[:1600]
+        print(f"[spotify_search] Truncated lyrics for {search_query} from {len(song_data.get('response', {}).get('song', {}).get('lyrics', {}).get('plain', ''))} to 1600 characters")
+    
+    return lyrics
 
 def get_song_metadata(song_name: str, artist_names: list[str]) -> str:
     """Ask LLM with search tool to research the song."""
@@ -162,17 +174,49 @@ def get_songs_from_playlists(playlists_data: Dict, access_token: str, query: str
     return unique_songs
 
 def enrich_songs(songs: list[RawSong]) -> list[SearchSong]:
-    """Enrich raw songs with lyrics and metadata."""
+    """Enrich raw songs with lyrics and metadata in parallel."""
     enriched = []
-    for song in songs:
-        lyrics = get_lyrics(song.name, song.artists)
-        song_metadata = get_song_metadata(song.name, song.artists)
-        enriched_song = SearchSong(
-            **song.__dict__,
-            lyrics=lyrics,
-            song_metadata=song_metadata
-        )
-        enriched.append(enriched_song)
+    
+    def enrich_single_song(song: RawSong) -> SearchSong:
+        """Enrich a single song with lyrics and metadata."""
+        try:
+            lyrics = get_lyrics(song.name, song.artists)
+            song_metadata = get_song_metadata(song.name, song.artists)
+            return SearchSong(
+                **song.__dict__,
+                lyrics=lyrics,
+                song_metadata=song_metadata
+            )
+        except Exception as e:
+            print(f"Error enriching song {song.name}: {e}")
+            # Return song with empty lyrics/metadata on error
+            return SearchSong(
+                **song.__dict__,
+                lyrics="",
+                song_metadata=""
+            )
+    
+    # Process songs in parallel with a reasonable number of workers
+    max_workers = min(50, len(songs))  # Cap at 10 concurrent requests
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all enrichment tasks
+        future_to_song = {executor.submit(enrich_single_song, song): song for song in songs}
+        
+        # Collect results as they complete
+        for future in as_completed(future_to_song):
+            try:
+                enriched_song = future.result()
+                enriched.append(enriched_song)
+            except Exception as e:
+                song = future_to_song[future]
+                print(f"Error processing song {song.name}: {e}")
+                # Add song with empty enrichment on error
+                enriched.append(SearchSong(
+                    **song.__dict__,
+                    lyrics="",
+                    song_metadata=""
+                ))
+    
     return enriched
 
 def get_playlist_names(access_token: str, refresh_token: Optional[str] = None) -> tuple[Dict, str]:
@@ -375,7 +419,7 @@ class handler(BaseHTTPRequestHandler):
             all_enriched_songs = already_processed_enriched_songs + newly_enriched_songs
             
             llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
-            result = search_library(llm_client, all_enriched_songs, query, n=3, chunk_size=1000)
+            result = search_library(llm_client, all_enriched_songs, query, n=3, chunk_size=250, verbose=True)
             
             # Convert Song objects to dictionaries for JSON serialization
             result_dicts = []

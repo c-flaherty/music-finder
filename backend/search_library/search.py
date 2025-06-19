@@ -1,6 +1,7 @@
 from .prompts import get_basic_query, decode_assistant_response
 from .types import Song
 from .clients import LLMClient, TextPrompt
+import numpy as np
 
 def search_library(client: LLMClient, library: list[Song], user_query: str, n: int = 3, chunk_size: int = 1000, verbose: bool = False) -> list[Song]:
     """
@@ -17,11 +18,31 @@ def search_library(client: LLMClient, library: list[Song], user_query: str, n: i
     Returns:
         A list of songs that match the user's query
     """
+
+    min_chars_per_song_lyrics = min([len(song.lyrics) for song in library])
+    max_chars_per_song_lyrics = max([len(song.lyrics) for song in library])
+    avg_chars_per_song_lyrics = sum([len(song.lyrics) for song in library]) / len(library)
+    median_chars_per_song_lyrics = np.median([len(song.lyrics) for song in library])
+    perc25_chars_per_song_lyrics = np.percentile([len(song.lyrics) for song in library], 25)
+    perc75_chars_per_song_lyrics = np.percentile([len(song.lyrics) for song in library], 75)
+
+    max_chars_song = max(library, key=lambda x: len(x.lyrics))
+
+    with open("/tmp/max_chars_song.txt", "w") as f:
+        f.write(str(max_chars_song))
+    print(f"MIN CHARS PER SONG LYRICS = {min_chars_per_song_lyrics}")
+    print(f"MAX CHARS PER SONG LYRICS = {max_chars_per_song_lyrics}")
+    print(f"AVG CHARS PER SONG LYRICS = {avg_chars_per_song_lyrics}")   
+    print(f"MEDIAN CHARS PER SONG LYRICS = {median_chars_per_song_lyrics}")
+    print(f"PERC25 CHARS PER SONG LYRICS = {perc25_chars_per_song_lyrics}")
+    print(f"PERC75 CHARS PER SONG LYRICS = {perc75_chars_per_song_lyrics}")
+
     # Break library into chunks of chunk_size songs
     chunks = [library[i:i + chunk_size] for i in range(0, len(library), chunk_size)]
 
     if verbose:
         print(f"NUMBER OF CHUNKS= {len(chunks)}")
+        print(f"SONGS PER CHUNK = {[len(chunk) for chunk in chunks]}")
     
     # Run recursive search on each chunk
     filtered_songs = []
@@ -42,8 +63,8 @@ def recursive_search(client: LLMClient, sublibrary: list[Song], user_query: str,
     prompt = get_basic_query(sublibrary, user_query, n)
 
     if verbose:
-        print("PROMPT")
-        print(prompt)
+        print("PROMPT LENGTH")
+        print(len(prompt))
     
     # The generate method expects list[list[GeneralContentBlock]]
     # So we need to wrap the TextPrompt in another list
@@ -59,14 +80,14 @@ def recursive_search(client: LLMClient, sublibrary: list[Song], user_query: str,
     response_text = first_block.text     # This is the text content
     
     if verbose:
-        print("RESPONSE TEXT")
-        print(response_text)
+        print("RESPONSE TEXT LENGTH")
+        print(len(response_text))
 
     song_reasons = decode_assistant_response(response_text)
 
     if verbose:
-        print("SONG REASONS")
-        print(song_reasons)
+        print("SONG REASONS LENGTH")
+        print(len(song_reasons))
 
     # Create a mapping of song IDs to their reasoning
     id_to_song = {song.id: song for song in sublibrary}
@@ -78,8 +99,8 @@ def recursive_search(client: LLMClient, sublibrary: list[Song], user_query: str,
             result_songs.append(song)
 
     if verbose:
-        print("SONGS WITH REASONING")
-        print([(song.name, song.reasoning) for song in result_songs])
+        print("SONGS WITH REASONING LENGTH")
+        print(len(result_songs))
 
     return result_songs
     
