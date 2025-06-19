@@ -23,6 +23,41 @@ Artists
 ------------
 {', '.join(self.artists)}
 ------------
+Album
+------------
+{self.album}
+------------
+Song Link
+------------
+{self.song_link}
+------------
+"""
+    
+@dataclass
+class Song(RawSong):
+    lyrics: str
+    song_metadata: str
+    reasoning: str = field(default_factory=lambda: "")
+    
+    def __str__(self):
+        return f"""
+------------
+ID
+------------
+{self.id}
+------------
+Name
+------------
+{self.name}
+------------
+Artists
+------------
+{', '.join(self.artists)}
+------------
+Album
+------------
+{self.album}
+------------
 Song Link
 ------------
 {self.song_link}
@@ -36,9 +71,3 @@ Lyrics
 {self.lyrics}
 ------------
 """
-    
-@dataclass
-class Song(RawSong):
-    lyrics: str
-    song_metadata: str
-    reasoning: str = field(default_factory=lambda: "")

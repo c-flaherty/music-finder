@@ -3,7 +3,7 @@ from .types import Song
 from .clients import LLMClient, TextPrompt
 import numpy as np
 
-def search_library(client: LLMClient, library: list[Song], user_query: str, n: int = 3, chunk_size: int = 1000, verbose: bool = False) -> list[Song]:
+def search_library(client: LLMClient, library: list[Song], user_query: str, n: int = 3, chunk_size: int = 1000, verbose: bool = False) -> tuple[list[Song], dict]:
     """
     Search the library for songs that match the user's query.
 
@@ -16,7 +16,7 @@ def search_library(client: LLMClient, library: list[Song], user_query: str, n: i
         verbose: Whether to print verbose output
 
     Returns:
-        A list of songs that match the user's query
+        A tuple of (songs that match the user's query, token usage statistics)
     """
 
     min_chars_per_song_lyrics = min([len(song.lyrics) for song in library])
@@ -46,20 +46,50 @@ def search_library(client: LLMClient, library: list[Song], user_query: str, n: i
     
     # Run recursive search on each chunk
     filtered_songs = []
+    total_token_usage = {
+        'total_input_tokens': 0,
+        'total_output_tokens': 0,
+        'total_requests': 0,
+        'requests_breakdown': []
+    }
+    
     for chunk in chunks:
-        chunk_results = recursive_search(client, chunk, user_query, n=n, verbose=verbose)
+        chunk_results, chunk_token_usage = recursive_search(client, chunk, user_query, n=n, verbose=verbose)
         filtered_songs.extend(chunk_results)
+        
+        # Aggregate token usage
+        total_token_usage['total_input_tokens'] += chunk_token_usage.get('input_tokens', 0)
+        total_token_usage['total_output_tokens'] += chunk_token_usage.get('output_tokens', 0)
+        total_token_usage['total_requests'] += 1
+        total_token_usage['requests_breakdown'].append({
+            'chunk_size': len(chunk),
+            'input_tokens': chunk_token_usage.get('input_tokens', 0),
+            'output_tokens': chunk_token_usage.get('output_tokens', 0)
+        })
     
     if verbose:
         print(f"NUMBER OF FILTERED SONGS BEFORE REDUCING = {len(filtered_songs)}")
 
     # If we have more songs than requested, run recursive search again on filtered set
     if len(filtered_songs) > n:
-        filtered_songs = recursive_search(client, filtered_songs, user_query, n=n, verbose=verbose)
+        final_results, final_token_usage = recursive_search(client, filtered_songs, user_query, n=n, verbose=verbose)
         
-    return filtered_songs
+        # Add final token usage
+        total_token_usage['total_input_tokens'] += final_token_usage.get('input_tokens', 0)
+        total_token_usage['total_output_tokens'] += final_token_usage.get('output_tokens', 0)
+        total_token_usage['total_requests'] += 1
+        total_token_usage['requests_breakdown'].append({
+            'chunk_size': len(filtered_songs),
+            'input_tokens': final_token_usage.get('input_tokens', 0),
+            'output_tokens': final_token_usage.get('output_tokens', 0),
+            'final_reduction': True
+        })
+        
+        return final_results, total_token_usage
+        
+    return filtered_songs, total_token_usage
 
-def recursive_search(client: LLMClient, sublibrary: list[Song], user_query: str, n: int = 3, verbose: bool = False) -> list[Song]:
+def recursive_search(client: LLMClient, sublibrary: list[Song], user_query: str, n: int = 3, verbose: bool = False) -> tuple[list[Song], dict]:
     prompt = get_basic_query(sublibrary, user_query, n)
 
     if verbose:
@@ -79,15 +109,24 @@ def recursive_search(client: LLMClient, sublibrary: list[Song], user_query: str,
     first_block = response_blocks[0]     # This is the first AssistantContentBlock
     response_text = first_block.text     # This is the text content
     
+    # Extract token usage from metadata
+    token_usage = response_tuple[1] if len(response_tuple) > 1 else {}
+    
     if verbose:
         print("RESPONSE TEXT LENGTH")
         print(len(response_text))
+        print("TOKEN USAGE:")
+        print(f"  Input tokens: {token_usage.get('input_tokens', 'N/A')}")
+        print(f"  Output tokens: {token_usage.get('output_tokens', 'N/A')}")
 
     song_reasons = decode_assistant_response(response_text)
 
     if verbose:
         print("SONG REASONS LENGTH")
         print(len(song_reasons))
+        print("SONG REASONS:")
+        for song_id, reason in song_reasons:
+            print(f"  ID: {song_id}, Reason: {reason}")
 
     # Create a mapping of song IDs to their reasoning
     id_to_song = {song.id: song for song in sublibrary}
@@ -97,11 +136,16 @@ def recursive_search(client: LLMClient, sublibrary: list[Song], user_query: str,
             song = id_to_song[song_id]
             song.reasoning = reason
             result_songs.append(song)
+            if verbose:
+                print(f"MATCHED: ID {song_id} -> {song.name} by {', '.join(song.artists)}")
+        else:
+            if verbose:
+                print(f"NO MATCH: ID {song_id} not found in library")
 
     if verbose:
         print("SONGS WITH REASONING LENGTH")
         print(len(result_songs))
 
-    return result_songs
+    return result_songs, token_usage
     
     
