@@ -14,12 +14,14 @@ export async function GET(request: Request) {
   const error = url.searchParams.get('error');
   const state = url.searchParams.get('state');
   
-  // Parse state to get q param
+  // Parse state to get q param and start_search flag
   let q: string | undefined;
+  let startSearch: boolean = false;
   if (state) {
     try {
       const parsed = JSON.parse(state);
       q = parsed.q ? decodeURIComponent(parsed.q) : undefined;
+      startSearch = parsed.start_search === true;
     } catch (e) {
       console.error('Failed to parse state:', e);
     }
@@ -75,6 +77,11 @@ export async function GET(request: Request) {
     // If q was in state, forward it
     if (q) {
       redirectUrl.searchParams.set('q', q);
+    }
+    
+    // If start_search was in state, forward it
+    if (startSearch) {
+      redirectUrl.searchParams.set('start_search', 'true');
     }
     
     console.log('Redirecting to library page with tokens:', {

@@ -287,6 +287,7 @@ export default function Home() {
   const [typedText, setTypedText] = useState("");
   const [isTyping, setIsTyping] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [shouldAutoSearch, setShouldAutoSearch] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const askButtonRef = useRef<HTMLButtonElement | null>(null);
   const readerRef = useRef<ReadableStreamDefaultReader | null>(null);
@@ -401,6 +402,8 @@ export default function Home() {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const q = params.get('q');
+      const startSearch = params.get('start_search') === 'true';
+      
       if (q) setSearch(q);
 
       // Handle tokens from URL after Spotify login
@@ -419,15 +422,44 @@ export default function Home() {
         }
         setIsAuthenticated(true);
 
-        // Clean up URL to remove tokens
+        // Clean up URL to remove tokens and start_search
         const newUrl = new URL(window.location.href);
         newUrl.searchParams.delete('access_token');
         newUrl.searchParams.delete('refresh_token');
         newUrl.searchParams.delete('expires_in');
+        newUrl.searchParams.delete('start_search');
         window.history.replaceState({}, '', newUrl.toString());
+
+        // If start_search is true and we have a search query, trigger search automatically
+        if (startSearch && q && q.trim()) {
+          setShouldAutoSearch(true);
+        }
       }
     }
   }, []);
+
+  // Auto-search effect when shouldAutoSearch is true and user is authenticated
+  useEffect(() => {
+    if (shouldAutoSearch && isAuthenticated && search.trim() && !isSearching) {
+      setShouldAutoSearch(false); // Reset the flag
+      // Trigger search programmatically by calling the search logic directly
+      const triggerSearch = async () => {
+        const fakeEvent = { 
+          preventDefault: () => {} 
+        } as React.FormEvent;
+        
+        // We need to call handleSearch but it's not in scope here
+        // So we'll dispatch a form submission event instead
+        const form = document.querySelector('form[data-search-form]');
+        if (form) {
+          const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+          form.dispatchEvent(submitEvent);
+        }
+      };
+      
+      triggerSearch();
+    }
+  }, [shouldAutoSearch, isAuthenticated, search, isSearching]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -571,7 +603,7 @@ export default function Home() {
 
                   if (data.type === 'progress') {
                     setProgress(data.processed);
-                    setTotal(data.total);
+                    setTotal(data.total * 1.1); // add 10% buffer so it never looks done
                     setMessage(data.message);
                     setShowProgress(true);
                   } else if (data.type === 'results') {
@@ -744,7 +776,7 @@ export default function Home() {
           What&apos;s that sound? What&apos;s that song about?
         </p> */}
         {/* Modern Search Bar */}
-        <form onSubmit={handleSearch} className="w-full max-w-xl flex flex-nowrap items-center bg-white border border-[#DDCDA8] rounded-2xl shadow-md px-4 md:px-5 py-3 focus-within:ring-2 focus-within:ring-[#F6A23B] transition-all mx-4 relative">
+        <form onSubmit={handleSearch} data-search-form className="w-full max-w-xl flex flex-nowrap items-center bg-white border border-[#DDCDA8] rounded-2xl shadow-md px-4 md:px-5 py-3 focus-within:ring-2 focus-within:ring-[#F6A23B] transition-all mx-4 relative">
           <svg className="w-5 h-5 md:w-6 md:h-6 text-[#838D5A]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" /></svg>
           <input
             type="text"

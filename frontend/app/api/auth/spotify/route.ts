@@ -25,8 +25,13 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const q = url.searchParams.get('q');
   
-  // Encode q in state parameter
-  const state = q ? JSON.stringify({ q: encodeURIComponent(q) }) : undefined;
+  // Encode q and start_search in state parameter
+  const stateData: any = {};
+  if (q) {
+    stateData.q = encodeURIComponent(q);
+    stateData.start_search = true; // Always set to true when q is present
+  }
+  const state = Object.keys(stateData).length > 0 ? JSON.stringify(stateData) : undefined;
 
   const params = new URLSearchParams({
     response_type: 'code',
