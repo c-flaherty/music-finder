@@ -750,7 +750,7 @@ export default function Home() {
           <button
             type="submit"
             onClick={handleAskClick}
-            className={`ml-2 px-4 md:px-5 py-2 rounded-xl font-semibold shadow transition-colors font-roobert relative flex-shrink-0 ${!search.trim() ? 'bg-gray-400 text-white' : 'bg-[#01D75E] text-white hover:bg-[#01c055] active:bg-[#00b04d]'}`}
+            className={`ml-2 px-4 md:px-5 py-2 rounded-xl font-semibold shadow transition-colors font-roobert cursor-pointer relative flex-shrink-0 ${!search.trim() ? 'bg-gray-400 text-white' : 'bg-[#01D75E] text-white hover:bg-[#01c055] active:bg-[#00b04d]'}`}
             disabled={!search.trim()}
             ref={askButtonRef}
           >
