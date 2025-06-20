@@ -180,11 +180,12 @@ def enrich_songs(songs: list[RawSong], progress_callback=None) -> list[SearchSon
         """Enrich a single song with lyrics and metadata."""
         lyrics = ""  # Initialize lyrics variable
         try:
-            lyrics = get_lyrics(song.name, song.artists)
-            if lyrics:
-                print(f"[LYRICS SUCCESS] {song.name} - {', '.join(song.artists)}")
-            else:
-                print(f"[LYRICS FAIL] {song.name} - {', '.join(song.artists)}")
+            ## Commented out for now to test frontend quickly
+            # lyrics = get_lyrics(song.name, song.artists)
+            # if lyrics:
+            #     print(f"[LYRICS SUCCESS] {song.name} - {', '.join(song.artists)}")
+            # else:
+            #     print(f"[LYRICS FAIL] {song.name} - {', '.join(song.artists)}")
             return SearchSong(
                 **song.__dict__,
                 lyrics=lyrics,
