@@ -328,7 +328,7 @@ async def spotify_search(
             
             # Search through the enriched songs using LLM
             llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
-            relevant_songs, search_token_usage = search_library(llm_client, all_enriched_songs, query, n=3, chunk_size=250, verbose=True)
+            relevant_songs, search_token_usage = search_library(llm_client, all_enriched_songs, query, n=3, chunk_size=100, verbose=True)
             
             print(f"[spotify_search] Done searching")
             

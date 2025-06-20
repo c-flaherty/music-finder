@@ -24,7 +24,7 @@ from search_library.clients import TextPrompt
 supabase_url = os.getenv('SUPABASE_URL')
 supabase_service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
-SET_MAX_SONGS_FORR_DEBUG: int | None = 50
+SET_MAX_SONGS_FORR_DEBUG: int | None = 100
 
 # --------------------------- Lyrics helper ---------------------------
 def get_lyrics(song_name: str, artist_names: list[str]) -> str:
@@ -52,7 +52,7 @@ def get_lyrics(song_name: str, artist_names: list[str]) -> str:
     isp_password = os.getenv('BD_ISP_PASSWORD')
     print(f"[DEBUG] ISP USER: {isp_username}, ISP PASS: {'set' if isp_password else 'not set'}")
     if isp_username and isp_password:
-        proxy_url = f'http://{isp_username}:{isp_password}@brd.superproxy.io:22225'
+        proxy_url = f'http://{isp_username}:{isp_password}@brd.superproxy.io:33335'
         proxies = {'http': proxy_url, 'https': proxy_url}
         verify_ssl = False
         use_proxy = True
