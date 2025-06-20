@@ -24,10 +24,11 @@ const chatMessages = [
 interface SearchResult {
   id: string;
   name: string;
-  artist: string;
+  artists: string[];
   song_link: string;
   reasoning: string;
   lyrics: string;
+  image_url?: string;
 }
 
 interface TokenUsage {
@@ -51,15 +52,15 @@ interface TokenUsage {
 // Lyrics Display Component
 const LyricsDisplay = ({ lyrics }: { lyrics: string }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  
+
   if (!lyrics || lyrics.trim() === '') {
     return null;
   }
-  
+
   const snippetLength = 150;
   const shouldShowExpand = lyrics.length > snippetLength;
   const displayText = isExpanded ? lyrics : lyrics.slice(0, snippetLength) + (shouldShowExpand ? '...' : '');
-  
+
   return (
     <div className="bg-white/50 rounded-lg p-3 border-l-4 border-[#01D75E]">
       <p className="text-sm text-[#502D07] font-medium mb-2">
@@ -83,21 +84,21 @@ const LyricsDisplay = ({ lyrics }: { lyrics: string }) => {
 // Token Usage Display Component
 const TokenUsageDisplay = ({ tokenUsage }: { tokenUsage: TokenUsage }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  
+
   console.log('TokenUsageDisplay rendered with:', tokenUsage);
-  
+
   if (!tokenUsage) {
     console.log('TokenUsageDisplay: Not showing - no token usage data');
     return null;
   }
-  
+
   // Show even if total_requests is 0 for debugging
   if (tokenUsage.total_requests === 0) {
     console.log('TokenUsageDisplay: Showing with zero requests for debugging');
   }
-  
+
   const totalTokens = tokenUsage.total_input_tokens + tokenUsage.total_output_tokens;
-  
+
   return (
     <div className="bg-white/50 rounded-lg p-3 border-l-4 border-[#838D5A] mb-4">
       <div className="flex items-center justify-between mb-2">
@@ -111,7 +112,7 @@ const TokenUsageDisplay = ({ tokenUsage }: { tokenUsage: TokenUsage }) => {
           {isExpanded ? 'Show less' : 'Show details'}
         </button>
       </div>
-      
+
       <div className="text-sm text-[#502D07] space-y-1">
         <div className="flex justify-between">
           <span>Total tokens used:</span>
@@ -164,7 +165,7 @@ const TokenUsageDisplay = ({ tokenUsage }: { tokenUsage: TokenUsage }) => {
           </div>
         )}
       </div>
-      
+
       {isExpanded && tokenUsage.requests_breakdown.length > 0 && (
         <div className="mt-3 pt-3 border-t border-[#DDCDA8]">
           <p className="text-xs text-[#502D07] font-medium mb-2">Request Breakdown:</p>
@@ -172,7 +173,7 @@ const TokenUsageDisplay = ({ tokenUsage }: { tokenUsage: TokenUsage }) => {
             {tokenUsage.requests_breakdown.map((request, index) => (
               <div key={index} className="text-xs text-[#502D07] flex justify-between">
                 <span>
-                  {request.final_reduction ? 'Final reduction' : `Chunk ${index + 1}`} 
+                  {request.final_reduction ? 'Final reduction' : `Chunk ${index + 1}`}
                   ({request.chunk_size} songs)
                 </span>
                 <span>{request.input_tokens + request.output_tokens} tokens</span>
@@ -181,6 +182,92 @@ const TokenUsageDisplay = ({ tokenUsage }: { tokenUsage: TokenUsage }) => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+// Function to get OpenGraph image from Spotify link
+const getSpotifyPreviewImage = async (spotifyUrl: string): Promise<string | null> => {
+  try {
+    // Using microlink.io service to extract OG data (free, no API key needed)
+    const response = await fetch(`https://api.microlink.io?url=${encodeURIComponent(spotifyUrl)}&screenshot=false&video=false`);
+    const data = await response.json();
+
+    if (data.status === 'success' && data.data && data.data.image) {
+      return data.data.image.url;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching preview image:', error);
+    return null;
+  }
+};
+
+// Component for Spotify Preview Image
+const SpotifyPreviewImage = ({ 
+  spotifyUrl, 
+  songName, 
+  title, 
+  artist 
+}: { 
+  spotifyUrl: string; 
+  songName: string;
+  title: string;
+  artist: string;
+}) => {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getSpotifyPreviewImage(spotifyUrl).then((url) => {
+      setImageUrl(url);
+      setLoading(false);
+    });
+  }, [spotifyUrl]);
+
+  // Truncate text to fit overlay
+  const truncateText = (text: string, maxLength: number) => {
+    return text.length > maxLength ? text.slice(0, maxLength) + '...' : text;
+  };
+
+  const truncatedTitle = truncateText(title, 20);
+  const truncatedArtist = truncateText(artist, 18);
+
+  return (
+    <div className="flex-shrink-0 relative w-36 h-36 rounded-lg overflow-hidden shadow-sm">
+      {loading ? (
+        <div className="w-full h-full bg-gray-200 animate-pulse flex items-center justify-center">
+          <Image src="/logos/cannoli.png" alt="Cannoli logo" width={32} height={32} className="opacity-60" />
+        </div>
+      ) : imageUrl ? (
+        <img
+          src={imageUrl}
+          alt={`${songName} album cover`}
+          className="w-full h-full object-cover"
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+          }}
+        />
+      ) : (
+        <div className="w-full h-full bg-gray-300 flex items-center justify-center">
+          <svg className="w-8 h-8 text-gray-500" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+          </svg>
+        </div>
+      )}
+      
+      {/* Overlay gradient for better text readability */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+      
+      {/* Text overlay - always shown */}
+      <div className="absolute bottom-0 left-0 right-0 p-3">
+        <h4 className="text-white font-semibold text-sm leading-tight mb-1 drop-shadow-sm">
+          {truncatedTitle}
+        </h4>
+        <p className="text-white/90 text-xs leading-tight drop-shadow-sm">
+          {truncatedArtist}
+        </p>
+      </div>
     </div>
   );
 };
@@ -205,14 +292,14 @@ export default function Home() {
     const token = localStorage.getItem('spotify_access_token');
     const refreshToken = localStorage.getItem('spotify_refresh_token');
     const expiresAt = localStorage.getItem('spotify_token_expires_at');
-    
+
     console.log('Auth state:', {
       hasAccessToken: !!token,
       hasRefreshToken: !!refreshToken,
       expiresAt: expiresAt ? new Date(parseInt(expiresAt)).toISOString() : 'not set',
       isExpired: expiresAt ? Date.now() > parseInt(expiresAt) : true
     });
-    
+
     setIsAuthenticated(!!token);
     setLoading(false);
   }, []);
@@ -261,12 +348,12 @@ export default function Home() {
       const params = new URLSearchParams(window.location.search);
       const q = params.get('q');
       if (q) setSearch(q);
-      
+
       // Handle tokens from URL after Spotify login
       const accessToken = params.get('access_token');
       const refreshToken = params.get('refresh_token');
       const expiresIn = params.get('expires_in');
-      
+
       if (accessToken) {
         localStorage.setItem('spotify_access_token', accessToken);
         if (refreshToken) {
@@ -277,7 +364,7 @@ export default function Home() {
           localStorage.setItem('spotify_token_expires_at', expiresAt.toString());
         }
         setIsAuthenticated(true);
-        
+
         // Clean up URL to remove tokens
         const newUrl = new URL(window.location.href);
         newUrl.searchParams.delete('access_token');
@@ -299,13 +386,13 @@ export default function Home() {
     setSearchResults([]);
 
     console.log('hi3');
-    
+
     try {
       // Check if token is expired
       const expiresAt = localStorage.getItem('spotify_token_expires_at');
       const refreshToken = localStorage.getItem('spotify_refresh_token');
       let token = localStorage.getItem('spotify_access_token');
-      
+
       if (expiresAt && Date.now() > parseInt(expiresAt) && !refreshToken) {
         router.push('/api/auth/spotify');
         return;
@@ -322,7 +409,7 @@ export default function Home() {
             },
             body: JSON.stringify({ refresh_token: refreshToken }),
           });
-          
+
           if (!response.ok) {
             // Clear local auth and redirect to login
             localStorage.removeItem('spotify_access_token');
@@ -331,7 +418,7 @@ export default function Home() {
             router.push(`/api/auth/spotify${search.trim() ? `?q=${encodeURIComponent(search.trim())}` : ''}`);
             return;
           }
-          
+
           const data = await response.json();
           token = data.access_token;
           if (token) {
@@ -365,7 +452,7 @@ export default function Home() {
 
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8001';
       const fetchUrl = `${backendUrl}/api/spotify_search?query=${encodeURIComponent(search)}`;
-      
+
       console.log('About to fetch:', {
         url: fetchUrl,
         method: 'GET',
@@ -413,20 +500,20 @@ export default function Home() {
         try {
           while (true) {
             const { done, value } = await reader.read();
-            
+
             if (done) break;
-            
+
             buffer += decoder.decode(value, { stream: true });
-            
+
             // Process complete SSE messages
             const messages = buffer.split('\n\n');
             buffer = messages.pop() || ''; // Keep incomplete message in buffer
-            
+
             for (const message of messages) {
               if (message.startsWith('data: ')) {
                 try {
                   const data = JSON.parse(message.slice(6)); // Remove 'data: ' prefix
-                  
+
                   if (data.type === 'progress') {
                     setProgress(data.processed);
                     setTotal(data.total);
@@ -590,7 +677,7 @@ export default function Home() {
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
-          <button 
+          <button
             type="submit"
             onClick={handleAskClick}
             className={`ml-2 px-4 md:px-5 py-2 rounded-xl font-semibold shadow transition-colors font-roobert relative flex-shrink-0 ${!search.trim() ? 'bg-gray-400 text-white' : 'bg-[#01D75E] text-white hover:bg-[#01c055] active:bg-[#00b04d]'}`}
@@ -651,7 +738,7 @@ export default function Home() {
               </span>
             </div>
             <div className="w-full bg-[#F7F7F7] rounded-full h-3 overflow-hidden">
-              <div 
+              <div
                 className="h-full bg-gradient-to-r from-[#01D75E] to-[#01c055] rounded-full transition-all duration-500 ease-out animate-shimmer"
                 style={{ width: `${total > 0 ? (progress / total) * 100 : 0}%` }}
               />
@@ -668,10 +755,10 @@ export default function Home() {
         <section className="w-full max-w-2xl mx-auto mb-12 md:mb-20 px-4 animate-fadeIn">
           <div className="bg-white border border-[#DDCDA8] rounded-2xl shadow-md p-4 md:p-6">
             <h2 className="text-xl font-['Proxima_Nova'] font-extrabold text-[#502D07] mb-4">Search Results</h2>
-            
+
             {/* Token Usage Display */}
             {tokenUsage && <TokenUsageDisplay tokenUsage={tokenUsage} />}
-            
+
             <div className="space-y-4">
               {searchResults.map((song, index) => (
                 <a
@@ -681,25 +768,29 @@ export default function Home() {
                   rel="noopener noreferrer"
                   className="block"
                 >
-                  <div className={`flex flex-col gap-3 p-4 bg-[#FFF5D1] rounded-lg  hover:shadow-md hover:-translate-y-0.5 transition-all duration-100 cursor-pointer group animate-fadeInUp animate-stagger-${Math.min(index + 1, 5)}`}>
-                    <div className="flex items-center gap-4">
-                      <div className="flex-1">
-                        <h3 className="font-['Proxima_Nova'] font-extrabold text-[#502D07] group-hover:text-[#a15b10] transition-colors">
-                          {song.name}
-                        </h3>
-                        <p className="text-sm text-[#838D5A]">
-                          {song.artist}
-                        </p>
+                  <div className={`flex flex-col p-4 bg-[#FFF5D1] rounded-lg hover:shadow-md hover:-translate-y-0.5 transition-all duration-100 cursor-pointer group animate-fadeInUp animate-stagger-${Math.min(index + 1, 5)}`}>
+
+                    <div className="flex flex-row gap-4">
+                      {/* Album Image */}
+                      <div className="flex-shrink-0">
+                        <SpotifyPreviewImage spotifyUrl={song.song_link} songName={song.name} title={song.name} artist={song.artists.join(', ')} />
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 flex flex-col gap-3 min-w-0">
+                        {/* Reasoning */}
+                        {song.reasoning && (
+                          <div className="rounded-lg p-3">
+                            <p className="text-sm text-[#502D07] font-medium">
+                              {song.reasoning}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Lyrics */}
+                        <LyricsDisplay lyrics={song.lyrics} />
                       </div>
                     </div>
-                    {song.reasoning && (
-                      <div className="bg-white/50 rounded-lg p-3 border-l-4 border-[#F6A23B]">
-                        <p className="text-sm text-[#502D07] font-medium">
-                          💡 {song.reasoning}
-                        </p>
-                      </div>
-                    )}
-                    <LyricsDisplay lyrics={song.lyrics} />
                   </div>
                 </a>
               ))}
@@ -727,7 +818,7 @@ export default function Home() {
               </div>
               <div className="w-5"></div> {/* Spacer for balance */}
             </div>
-            
+
             <div className="p-4 flex-1 overflow-y-auto">
               <div className="space-y-1">
                 <div className="flex justify-center mb-2">
@@ -739,16 +830,14 @@ export default function Home() {
                 {chatMessages.map((message, index) => (
                   <div
                     key={index}
-                    className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"} ${
-                      index > 0 && message.sender !== chatMessages[index - 1].sender ? 'mt-5' : ''
-                    }`}
+                    className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"} ${index > 0 && message.sender !== chatMessages[index - 1].sender ? 'mt-5' : ''
+                      }`}
                   >
                     <div
-                      className={`max-w-[80%] px-3 py-1.5 rounded-[20px] ${
-                        message.sender === "user"
-                          ? "bg-[#1F8AFF] text-white"
-                          : "bg-[#E5E5EA] text-black"
-                      }`}
+                      className={`max-w-[80%] px-3 py-1.5 rounded-[20px] ${message.sender === "user"
+                        ? "bg-[#1F8AFF] text-white"
+                        : "bg-[#E5E5EA] text-black"
+                        }`}
                     >
                       <p className="text-sm md:text-base">{message.text}</p>
                     </div>
