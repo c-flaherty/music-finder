@@ -1,5 +1,6 @@
 # api/spotify_search.py
 import json, asyncio, os, requests, base64, urllib.request, urllib.parse
+import random
 from datetime import datetime
 from typing import Union, List, Dict, Any
 from fastapi import FastAPI, HTTPException, Header, Query
@@ -29,7 +30,7 @@ from search_library.clients import get_client
 from search_library.prompts import get_song_metadata_query
 from search_library.clients import TextPrompt
 
-SET_MAX_SONGS_FORR_DEBUG: int | None = 10
+SET_MAX_SONGS_FORR_DEBUG: int | None = 50
 
 # --------------------------- Lyrics helper ---------------------------
 def get_lyrics(song_name: str, artist_names: list[str]) -> str:
@@ -569,12 +570,19 @@ async def spotify_search(
             
             # Process songs with progress updates (song processing takes most of the progress)
             enriched_songs = []
-            perc5_unprocessed_songs_ct = max(len(unprocessed_raw_songs) // 20, 1)
+            perc5_unprocessed_songs_ct = max(len(unprocessed_raw_songs) // 20, 5)
             for song in enrich_songs(unprocessed_raw_songs):
                 enriched_songs.append(song)
                 if len(enriched_songs) % perc5_unprocessed_songs_ct == 0:
-                    yield f"data: {json.dumps({'type': 'progress', 'processed': len(enriched_songs), 'total': total_progress_steps, 'message': f'Cannoli has listened to {len(enriched_songs)} out of {len(unprocessed_raw_songs)} new songs...'})}\n\n"
-                    await asyncio.sleep(0.1)
+
+                    # with a 5% chance emit a progress update with the message
+                    # "Just listened to song.title by song.artist!"
+                    if random.random() < 0.05:
+                        yield f"data: {json.dumps({'type': 'progress', 'processed': len(enriched_songs), 'total': total_progress_steps, 'message': f'Just listened to {song.name} by {', '.join(song.artists)}...'})}\n\n"
+                        await asyncio.sleep(0.1)
+                    else:
+                        yield f"data: {json.dumps({'type': 'progress', 'processed': len(enriched_songs), 'total': total_progress_steps, 'message': f'Cannoli has listened to {len(enriched_songs)} out of {len(unprocessed_raw_songs)} new songs...'})}\n\n"
+                        await asyncio.sleep(0.1)
             
             # Combine all enriched songs
             all_enriched_songs = already_processed_enriched_songs + enriched_songs
