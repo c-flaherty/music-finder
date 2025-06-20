@@ -34,12 +34,14 @@ cd music-finder
 #### Setup virtual env
 
 ```bash
-poetry install
-poetry env activate
-# Now run the "source .." command it outputs. You can rerun "poetry env activate" whenever you want to get this command again.
+
+cd music-finder/backend
+python3 -m venv env 
+source env/bin/activate
+pip install -r requirements.txt
 ```
 
-#### Link to vercel
+#### Link to vercel (get env vars)
 
 This is needed to pull down env variables. Otherwise, Vercel is updated via pushing code to the remote Github repo.
 
@@ -61,17 +63,8 @@ vercel env pull .env.local
 ```
 
 Now startup the backend for development. Run from root directory:
-
-Install packages
 ```
-cd music-finder/backend
-python3 -m venv env 
-source env/bin/activate
-```
-
-Run server
-```
-uvicorn main:app --host 0.0.0.0 --port 3001
+uvicorn main:app --host 0.0.0.0 --port 8001
 ```
 
 ### 3. Frontend Setup
