@@ -572,7 +572,7 @@ export default function Home() {
 
                   if (data.type === 'progress') {
                     setProgress(data.processed);
-                    setTotal(data.total - 2);
+                    setTotal(data.total);
                     setShowProgress(true);
                   } else if (data.type === 'results') {
                     console.log('Search response data:', data);
