@@ -776,24 +776,36 @@ export default function Home() {
           What&apos;s that sound? What&apos;s that song about?
         </p> */}
         {/* Modern Search Bar */}
-        <form onSubmit={handleSearch} data-search-form className="w-full max-w-xl flex flex-nowrap items-center bg-white border border-[#DDCDA8] rounded-2xl shadow-md px-4 md:px-5 py-3 focus-within:ring-2 focus-within:ring-[#F6A23B] transition-all mx-4 relative">
-          <svg className="w-5 h-5 md:w-6 md:h-6 text-[#838D5A]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" /></svg>
-          <input
-            type="text"
-            className="flex-1 min-w-0 bg-transparent outline-none px-3 py-2 text-base md:text-lg text-[#502D07] placeholder-[#838D5A] font-roobert"
-            placeholder={typedText + (isTyping && !isDeleting ? "|" : "")}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-          <button
-            type="submit"
-            onClick={handleAskClick}
-            className={`ml-2 px-4 md:px-5 py-2 rounded-xl font-semibold shadow transition-colors font-roobert cursor-pointer relative flex-shrink-0 ${!search.trim() ? 'bg-gray-400 text-white' : 'bg-[#01D75E] text-white hover:bg-[#01c055] active:bg-[#00b04d]'}`}
-            disabled={!search.trim()}
-            ref={askButtonRef}
-          >
-            {isSearching ? 'Searching...' : 'Find song'}
-          </button>
+        <form onSubmit={handleSearch} data-search-form className="w-full max-w-xl flex flex-col bg-white border border-[#DDCDA8] rounded-2xl shadow-md px-4 md:px-5 py-3 focus-within:ring-2 focus-within:ring-[#F6A23B] transition-all mx-4 relative">
+          <div className="flex items-start gap-3 mb-3">
+            <textarea
+              className="flex-1 bg-transparent outline-none py-2 text-base md:text-lg text-[#502D07] placeholder-[#838D5A] font-roobert resize-none overflow-hidden min-h-[1.5rem] max-h-32"
+              placeholder={typedText + (isTyping && !isDeleting ? "|" : "")}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              rows={1}
+              style={{
+                lineHeight: '1.5rem',
+                height: 'auto'
+              }}
+              onInput={(e) => {
+                const textarea = e.target as HTMLTextAreaElement;
+                textarea.style.height = 'auto';
+                textarea.style.height = Math.min(textarea.scrollHeight, 128) + 'px';
+              }}
+            />
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              onClick={handleAskClick}
+              className={`px-4 md:px-5 py-2 rounded-xl font-semibold shadow transition-colors font-roobert cursor-pointer ${!search.trim() ? 'bg-gray-400 text-white' : 'bg-[#01D75E] text-white hover:bg-[#01c055] active:bg-[#00b04d]'}`}
+              disabled={!search.trim()}
+              ref={askButtonRef}
+            >
+              {isSearching ? 'Searching...' : 'Find song'}
+            </button>
+          </div>
           {showAuthDropdown && !isAuthenticated && (
             <div
               ref={dropdownRef}
