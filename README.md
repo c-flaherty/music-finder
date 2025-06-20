@@ -61,8 +61,17 @@ vercel env pull .env.local
 ```
 
 Now startup the backend for development. Run from root directory:
-```bash
-npx vercel dev --debug
+
+Install packages
+```
+cd music-finder/backend
+python3 -m venv env 
+source env/bin/activate
+```
+
+Run server
+```
+uvicorn main:app --host 0.0.0.0 --port 3001
 ```
 
 ### 3. Frontend Setup
