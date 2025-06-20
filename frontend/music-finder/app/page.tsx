@@ -284,6 +284,7 @@ export default function Home() {
   const [progress, setProgress] = useState(0);
   const [total, setTotal] = useState(0);
   const [showProgress, setShowProgress] = useState(false);
+  const [showTokenUsage, setShowTokenUsage] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const askButtonRef = useRef<HTMLButtonElement | null>(null);
   const readerRef = useRef<ReadableStreamDefaultReader | null>(null);
@@ -754,10 +755,30 @@ export default function Home() {
       {searchResults.length > 0 && (
         <section className="w-full max-w-2xl mx-auto mb-12 md:mb-20 px-4 animate-fadeIn">
           <div className="bg-white border border-[#DDCDA8] rounded-2xl shadow-md p-4 md:p-6">
-            <h2 className="text-xl font-['Proxima_Nova'] font-extrabold text-[#502D07] mb-4">Search Results</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-['Proxima_Nova'] font-extrabold text-[#502D07]">Search Results</h2>
+              
+              {/* Token Usage Toggle Button */}
+              {tokenUsage && (
+                <button
+                  onClick={() => setShowTokenUsage(!showTokenUsage)}
+                  className="flex items-center gap-2 text-sm text-[#838D5A] hover:text-[#502D07] font-medium transition-colors"
+                >
+                  🔍 Search Analytics
+                  <svg 
+                    className={`w-4 h-4 transition-transform ${showTokenUsage ? 'rotate-180' : ''}`} 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              )}
+            </div>
 
             {/* Token Usage Display */}
-            {tokenUsage && <TokenUsageDisplay tokenUsage={tokenUsage} />}
+            {tokenUsage && showTokenUsage && <TokenUsageDisplay tokenUsage={tokenUsage} />}
 
             <div className="space-y-4">
               {searchResults.map((song, index) => (
