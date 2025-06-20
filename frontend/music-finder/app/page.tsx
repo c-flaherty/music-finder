@@ -100,18 +100,8 @@ const TokenUsageDisplay = ({ tokenUsage }: { tokenUsage: TokenUsage }) => {
   const totalTokens = tokenUsage.total_input_tokens + tokenUsage.total_output_tokens;
 
   return (
-    <div className="bg-white/50 rounded-lg p-3 border-l-4 border-[#838D5A] mb-4">
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-sm text-[#502D07] font-medium">
-          🔍 Search Analytics
-        </p>
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="text-xs text-[#838D5A] hover:text-[#502D07] font-medium transition-colors"
-        >
-          {isExpanded ? 'Show less' : 'Show details'}
-        </button>
-      </div>
+<div className="bg-white/50 rounded-lg p-3  mb-4">
+  
 
       <div className="text-sm text-[#502D07] space-y-1">
         <div className="flex justify-between">
@@ -182,6 +172,13 @@ const TokenUsageDisplay = ({ tokenUsage }: { tokenUsage: TokenUsage }) => {
           </div>
         </div>
       )}
+
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="text-xs text-[#838D5A] hover:text-[#502D07] font-medium transition-colors mt-3 w-full text-center cursor-pointer"
+      >
+        {isExpanded ?   'Hide chunk breakdown' : 'Show chunk breakdown'}
+      </button>
     </div>
   );
 };
@@ -872,7 +869,7 @@ export default function Home() {
             {tokenUsage && (
               <button
                 onClick={() => setShowTokenUsage(!showTokenUsage)}
-                className="flex items-center gap-2 text-sm text-[#838D5A] hover:text-[#502D07] font-medium transition-colors"
+                className="flex items-center gap-2 text-sm text-[#838D5A] hover:text-[#502D07] font-medium transition-colors cursor-pointer"
               >
                 🔍 Search Analytics
                 <svg 
