@@ -10,18 +10,6 @@ const roobert = localFont({
   display: 'swap',
 });
 
-// Add font-face declaration
-const proximaNovaExtrabold = `
-  @font-face {
-    font-family: 'Proxima Nova';
-    src: url('/fonts/proximanova/proximanova-extrabold-webfont.woff2') format('woff2'),
-         url('/fonts/proximanova/proximanova-extrabold-webfont.woff') format('woff'),
-         url('/fonts/proximanova/proximanova-extrabold-webfont.ttf') format('truetype');
-    font-weight: 800;
-    font-style: normal;
-  }
-`;
-
 const chatMessages = [
   { sender: "user", text: "bro what was that song we were listening to" },
   { sender: "user", text: "the one that's like yeah yeah" },
@@ -506,9 +494,82 @@ export default function Home() {
 
   return (
     <div className={`min-h-screen bg-[#FFF5D1] flex flex-col items-center py-8 md:py-12 px-4 ${roobert.variable} font-roobert`}>
+      <style jsx global>{`
+        @font-face {
+          font-family: 'Proxima Nova';
+          src: url('/fonts/proximanova/proximanova-extrabold-webfont.woff2') format('woff2'),
+               url('/fonts/proximanova/proximanova-extrabold-webfont.woff') format('woff'),
+               url('/fonts/proximanova/proximanova-extrabold-webfont.ttf') format('truetype');
+          font-weight: 800;
+          font-style: normal;
+        }
+        
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+        
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes shimmer {
+          0% {
+            background-position: -200% 0;
+          }
+          100% {
+            background-position: 200% 0;
+          }
+        }
+        
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+        
+        .animate-slideDown {
+          animation: slideDown 0.4s ease-out;
+        }
+        
+        .animate-shimmer {
+          background: linear-gradient(90deg, #01D75E 25%, #01c055 50%, #01D75E 75%);
+          background-size: 200% 100%;
+          animation: shimmer 2s infinite;
+        }
+        
+        .animate-fadeInUp {
+          animation: fadeInUp 0.5s ease-out;
+        }
+        
+        .animate-stagger-1 { animation-delay: 0.1s; }
+        .animate-stagger-2 { animation-delay: 0.2s; }
+        .animate-stagger-3 { animation-delay: 0.3s; }
+        .animate-stagger-4 { animation-delay: 0.4s; }
+        .animate-stagger-5 { animation-delay: 0.5s; }
+      `}</style>
       {/* Header & Hero */}
       <header className="w-full max-w-2xl mx-auto flex flex-col items-center mb-8 md:mb-12">
-        <style jsx global>{proximaNovaExtrabold}</style>
         <h1 className="font-roobert text-4xl md:text-5xl lg:text-6xl font-[800] text-[#F6A23B] text-center mb-3 md:mb-4 tracking-tight leading-tight">
           Remember that song
           <span className="flex items-center justify-center w-full mt-1 gap-2" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -578,25 +639,25 @@ export default function Home() {
       </header>
 
       {/* Progress Bar */}
-      {true && (
-        <section className="w-full max-w-2xl mx-auto mb-6 px-4">
-          <div className="bg-white border border-[#DDCDA8] rounded-2xl shadow-md p-4 md:p-6">
+      {isSearching && (
+        <section className="w-full max-w-2xl mx-auto mb-6 px-4 animate-fadeIn">
+          <div className="bg-white border border-[#DDCDA8] rounded-2xl shadow-md p-4 md:p-6 transform transition-all duration-300 ease-out animate-slideDown">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-['Proxima_Nova'] font-extrabold text-[#502D07]">
-                Processing songs...
+                {showProgress ? 'Processing songs...' : 'Starting search...'}
               </h3>
-              <span className="text-sm text-[#838D5A] font-roobert">
-                {progress} / {total}
+              <span className="text-sm text-[#838D5A] font-roobert animate-pulse">
+                {showProgress ? `${Math.round((progress / total) * 100)}%` : '...'}
               </span>
             </div>
             <div className="w-full bg-[#F7F7F7] rounded-full h-3 overflow-hidden">
               <div 
-                className="h-full bg-gradient-to-r from-[#01D75E] to-[#01c055] rounded-full transition-all duration-500 ease-out"
+                className="h-full bg-gradient-to-r from-[#01D75E] to-[#01c055] rounded-full transition-all duration-500 ease-out animate-shimmer"
                 style={{ width: `${total > 0 ? (progress / total) * 100 : 0}%` }}
               />
             </div>
             <p className="text-xs text-[#838D5A] mt-2 font-roobert">
-              Enriching songs with lyrics and metadata...
+              {showProgress ? 'Enriching songs with lyrics and metadata...' : 'Connecting to Spotify and preparing search...'}
             </p>
           </div>
         </section>
@@ -604,7 +665,7 @@ export default function Home() {
 
       {/* Search Results */}
       {searchResults.length > 0 && (
-        <section className="w-full max-w-2xl mx-auto mb-12 md:mb-20 px-4">
+        <section className="w-full max-w-2xl mx-auto mb-12 md:mb-20 px-4 animate-fadeIn">
           <div className="bg-white border border-[#DDCDA8] rounded-2xl shadow-md p-4 md:p-6">
             <h2 className="text-xl font-['Proxima_Nova'] font-extrabold text-[#502D07] mb-4">Search Results</h2>
             
@@ -612,7 +673,7 @@ export default function Home() {
             {tokenUsage && <TokenUsageDisplay tokenUsage={tokenUsage} />}
             
             <div className="space-y-4">
-              {searchResults.map((song) => (
+              {searchResults.map((song, index) => (
                 <a
                   key={song.id}
                   href={song.song_link}
@@ -620,7 +681,7 @@ export default function Home() {
                   rel="noopener noreferrer"
                   className="block"
                 >
-                  <div className="flex flex-col gap-3 p-4 bg-[#FFF5D1] rounded-lg hover:bg-[#DDCDA8] transition-colors cursor-pointer group">
+                  <div className={`flex flex-col gap-3 p-4 bg-[#FFF5D1] rounded-lg hover:bg-[#DDCDA8] transition-colors cursor-pointer group animate-fadeInUp animate-stagger-${Math.min(index + 1, 5)}`}>
                     <div className="flex items-center gap-4">
                       <div className="flex-1">
                         <h3 className="font-['Proxima_Nova'] font-extrabold text-[#502D07] group-hover:text-[#F6A23B] transition-colors">
