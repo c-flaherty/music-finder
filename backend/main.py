@@ -14,7 +14,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
-load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))
+# Correctly load .env.local from the backend directory
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env.local'))
 
 # Add the search_library directory to Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -28,13 +29,13 @@ from search_library.clients import get_client
 from search_library.prompts import get_song_metadata_query
 from search_library.clients import TextPrompt
 
-SET_MAX_SONGS_FORR_DEBUG: int | None = 10
+SET_MAX_SONGS_FORR_DEBUG: int | None = 2000
 
 # --------------------------- Lyrics helper ---------------------------
 def get_lyrics(song_name: str, artist_names: list[str]) -> str:
     """Fetch plain-text lyrics from Genius for the given song/artist."""
     search_query = f"{song_name} {', '.join(artist_names)}"
-    print(f"[spotify_search] Searching for lyrics for {search_query}")
+    print(f"[DEBUG] Searching for lyrics for: {search_query}")
     
     headers = {
         'accept': '*/*',
@@ -44,55 +45,70 @@ def get_lyrics(song_name: str, artist_names: list[str]) -> str:
         'accept-language': 'en-US,en;q=0.9',
         'user-agent': 'Genius/1267 CFNetwork/3826.500.131 Darwin/24.5.0'
     }
-    
-    if os.getenv('GENIUS_ACCESS_TOKEN'):
-        headers['Authorization'] = f"Bearer {os.getenv('GENIUS_ACCESS_TOKEN')}"
+    # Never send Authorization header for Genius API requests
 
-    # Search for the song
+    proxies = None
+    verify_ssl = True
+    use_proxy = False
+    isp_username = os.getenv('BD_ISP_USERNAME')
+    isp_password = os.getenv('BD_ISP_PASSWORD')
+    print(f"[DEBUG] ISP USER: {isp_username}, ISP PASS: {'set' if isp_password else 'not set'}")
+    if isp_username and isp_password:
+        proxy_url = f'http://{isp_username}:{isp_password}@brd.superproxy.io:22225'
+        proxies = {'http': proxy_url, 'https': proxy_url}
+        verify_ssl = False
+        use_proxy = True
+        print(f"[DEBUG] Using ISP proxy: {proxy_url}")
+
     search_url = f"https://api.genius.com/search?q={search_query}"
-    print(f"[spotify_search] Searching for lyrics for {search_query} at {search_url}")
-    search_response = requests.get(search_url, headers=headers)
-    
+    print(f"[DEBUG] Search URL: {search_url}")
+    try:
+        search_response = requests.get(search_url, headers=headers, proxies=proxies, verify=verify_ssl, timeout=10)
+        print(f"[DEBUG] Search response status: {search_response.status_code}")
+    except Exception as proxy_error:
+        print(f"[DEBUG] Proxy request failed: {proxy_error}")
+        if use_proxy:
+            search_response = requests.get(search_url, headers=headers, timeout=10)
+        else:
+            return ""
     if not search_response.ok:
-        print(f"[spotify_search] Genius search request failed for '{search_query}'. Status: {search_response.status_code}, Response: {search_response.text}")
+        print(f"[DEBUG] Genius search request failed. Status: {search_response.status_code}, Response: {search_response.text[:200]}")
         return ""
-    
     try:
         search_data = search_response.json()
+        print(f"[DEBUG] Search data: {json.dumps(search_data)[:200]}")
     except json.JSONDecodeError:
-        print(f"[spotify_search] Genius search returned non-JSON for '{search_query}'. Status: {search_response.status_code}, Response: {search_response.text}")
+        print(f"[DEBUG] Genius search returned non-JSON. Status: {search_response.status_code}, Response: {search_response.text[:200]}")
         return ""
-    
     song_id = search_data.get('response', {}).get('hits', [{}])[0].get('result', {}).get('id')
+    print(f"[DEBUG] Song ID: {song_id}")
     if not song_id:
-        print(f"[spotify_search] No song ID found for {search_query}")
+        print(f"[DEBUG] No song ID found for {search_query}")
         return ""
-    else:
-        print(f"[spotify_search] Found song ID {song_id} for {search_query}")
-
-    # Get song details
     song_url = f"https://api.genius.com/songs/{song_id}?text_format=plain"
-    song_response = requests.get(song_url, headers=headers)
-
+    print(f"[DEBUG] Song URL: {song_url}")
+    try:
+        song_response = requests.get(song_url, headers=headers, proxies=proxies, verify=verify_ssl, timeout=10)
+        print(f"[DEBUG] Song response status: {song_response.status_code}")
+    except Exception as proxy_error:
+        print(f"[DEBUG] Proxy request for song details failed: {proxy_error}")
+        if use_proxy:
+            song_response = requests.get(song_url, headers=headers, timeout=10)
+        else:
+            return ""
     if not song_response.ok:
-        print(f"[spotify_search] Genius song details request failed for song ID {song_id}. Status: {song_response.status_code}, Response: {song_response.text}")
+        print(f"[DEBUG] Genius song details request failed. Status: {song_response.status_code}, Response: {song_response.text[:200]}")
         return ""
-
     try:
         song_data = song_response.json()
+        print(f"[DEBUG] Song data: {json.dumps(song_data)[:200]}")
     except json.JSONDecodeError:
-        print(f"[spotify_search] Genius song details returned non-JSON for song ID {song_id}. Status: {song_response.status_code}, Response: {song_response.text}")
+        print(f"[DEBUG] Genius song details returned non-JSON. Status: {song_response.status_code}, Response: {song_response.text[:200]}")
         return ""
-    
-    print(song_data)
-    
     lyrics = song_data.get('response', {}).get('song', {}).get('lyrics', {}).get('plain', "")
-    
-    # Truncate lyrics to 1600 characters if they're too long
+    print(f"[DEBUG] Lyrics length: {len(lyrics)}")
     if len(lyrics) > 1600:
         lyrics = lyrics[:1600]
-        print(f"[spotify_search] Truncated lyrics for {search_query} from {len(song_data.get('response', {}).get('song', {}).get('lyrics', {}).get('plain', ''))} to 1600 characters")
-    
     return lyrics
 
 def get_song_metadata(song_name: str, artist_names: list[str]) -> str:
@@ -111,7 +127,7 @@ def get_song_metadata(song_name: str, artist_names: list[str]) -> str:
 def get_songs_from_playlists(playlists_data: Dict, access_token: str, query: str) -> list[RawSong]:
     all_songs = []
 
-    for playlist in playlists_data['items'][:5]:
+    for playlist in playlists_data['items']:
         tracks_response = requests.get(
             f"https://api.spotify.com/v1/playlists/{playlist['id']}/tracks",
             headers={
@@ -125,7 +141,7 @@ def get_songs_from_playlists(playlists_data: Dict, access_token: str, query: str
 
         tracks_data = tracks_response.json()
         
-        for item in tracks_data['items'][:100]: # safety cap
+        for item in tracks_data['items']:
             track_data = item.get('track')
             if not track_data or not track_data.get('id'):
                 continue
@@ -158,23 +174,27 @@ def enrich_songs(songs: list[RawSong], progress_callback=None) -> list[SearchSon
     enriched = []
     processed_count = 0
     total_count = len(songs)
+    lyrics_success_count = 0
     
     def enrich_single_song(song: RawSong) -> SearchSong:
         """Enrich a single song with lyrics and metadata."""
+        lyrics = ""  # Initialize lyrics variable
         try:
-            # Currently disabled for performance
-            # lyrics = get_lyrics(song.name, song.artists)
-            # song_metadata = get_song_metadata(song.name, song.artists)
+            lyrics = get_lyrics(song.name, song.artists)
+            if lyrics:
+                print(f"[LYRICS SUCCESS] {song.name} - {', '.join(song.artists)}")
+            else:
+                print(f"[LYRICS FAIL] {song.name} - {', '.join(song.artists)}")
             return SearchSong(
                 **song.__dict__,
-                lyrics="",
+                lyrics=lyrics,
                 song_metadata=""
             )
         except Exception as e:
-            print(f"Error enriching song {song.name}: {e}")
+            print(f"[LYRICS FAIL] {song.name} - {', '.join(song.artists)} (error: {e})")
             return SearchSong(
                 **song.__dict__,
-                lyrics="",
+                lyrics=lyrics,  # Now lyrics is always defined
                 song_metadata=""
             )
     
@@ -198,9 +218,11 @@ def enrich_songs(songs: list[RawSong], progress_callback=None) -> list[SearchSon
             try:
                 enriched_song = future.result()
                 enriched.append(enriched_song)
+                if enriched_song.lyrics:
+                    lyrics_success_count += 1
             except Exception as e:
                 song = future_to_song[future]
-                print(f"Error processing song {song.name}: {e}")
+                print(f"[LYRICS FAIL] {song.name} - {', '.join(song.artists)} (error: {e})")
                 enriched.append(SearchSong(
                     **song.__dict__,
                     lyrics="these are some lyrics",
@@ -227,6 +249,7 @@ def enrich_songs(songs: list[RawSong], progress_callback=None) -> list[SearchSon
         if progress_callback and processed_count == total_count:
             progress_callback(processed_count, total_count)
     
+    print(f"[LYRICS SUMMARY] Processed {total_count} songs, got lyrics for {lyrics_success_count} songs.")
     return enriched
 
 def get_playlist_names_internal(access_token: str, refresh_token: str = None) -> tuple[Dict, str]:
@@ -234,7 +257,7 @@ def get_playlist_names_internal(access_token: str, refresh_token: str = None) ->
     Fetch user's playlists from Spotify API with automatic token refresh if needed.
     """
     playlists_response = requests.get(
-        'https://api.spotify.com/v1/me/playlists?limit=10',
+        'https://api.spotify.com/v1/me/playlists?limit=50',
         headers={
             'Authorization': f'Bearer {access_token}',
             'Content-Type': 'application/json'
@@ -245,7 +268,7 @@ def get_playlist_names_internal(access_token: str, refresh_token: str = None) ->
         # Token expired, try to refresh
         new_token = refresh_access_token(refresh_token)
         playlists_response = requests.get(
-            'https://api.spotify.com/v1/me/playlists?limit=10',
+            'https://api.spotify.com/v1/me/playlists?limit=50',
             headers={
                 'Authorization': f'Bearer {new_token}',
                 'Content-Type': 'application/json'
@@ -295,11 +318,16 @@ class SpotifyRefreshRequest(BaseModel):
 
 def refresh_access_token(refresh_token: str) -> str:
     """Refresh Spotify access token using refresh token"""
+    client_id = os.getenv('SPOTIFY_CLIENT_ID')
+    client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
+    auth_string = f"{client_id}:{client_secret}"
+    auth_header = base64.b64encode(auth_string.encode()).decode()
+    
     response = requests.post(
         'https://accounts.spotify.com/api/token',
         headers={
             'Content-Type': 'application/x-www-form-urlencoded',
-            'Authorization': f"Basic {base64.b64encode(f'{os.getenv('SPOTIFY_CLIENT_ID')}:{os.getenv('SPOTIFY_CLIENT_SECRET')}'.encode()).decode()}"
+            'Authorization': f"Basic {auth_header}"
         },
         data={
             'grant_type': 'refresh_token',
@@ -563,25 +591,7 @@ async def spotify_search(
             await asyncio.sleep(0.1)
             
             # Process songs with progress updates (song processing takes most of the progress)
-            enriched_songs = []
-            for i, song in enumerate(unprocessed_raw_songs):
-                # Convert to SearchSong format
-                enriched_song = SearchSong(
-                    **song.__dict__,
-                    lyrics="",
-                    song_metadata=""
-                )
-                enriched_songs.append(enriched_song)
-                
-                # Emit progress every few songs or on completion
-                if (i + 1) % max(1, len(unprocessed_raw_songs) // 20) == 0 or i == len(unprocessed_raw_songs) - 1:
-                    progress_data = {
-                        'type': 'progress', 
-                        'processed': i + 1,  # This only accounts for song processing
-                        'total': total_progress_steps
-                    }
-                    yield f"data: {json.dumps(progress_data)}\n\n"
-                    await asyncio.sleep(0.05)  # Small delay like test_ping
+            enriched_songs = enrich_songs(unprocessed_raw_songs, progress_callback=None)
             
             # Combine all enriched songs
             all_enriched_songs = already_processed_enriched_songs + enriched_songs

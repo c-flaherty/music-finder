@@ -90,6 +90,7 @@ htmlcov/
 .nyc_output
 junit.xml
 coverage.xml
+test_*.py
 
 # Jupyter Notebook
 .ipynb_checkpoints

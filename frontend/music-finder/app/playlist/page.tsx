@@ -96,7 +96,7 @@ function PlaylistContent() {
           variables: {
             uri: playlistUri,
             offset: 0,
-            limit: 25,
+            limit: 100,
             enableWatchFeedEntrypoint: false
           },
           operationName: "fetchPlaylist",
