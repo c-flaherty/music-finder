@@ -285,9 +285,23 @@ export default function Home() {
   const [total, setTotal] = useState(0);
   const [showProgress, setShowProgress] = useState(false);
   const [showTokenUsage, setShowTokenUsage] = useState(false);
+  const [currentPlaceholderIndex, setCurrentPlaceholderIndex] = useState(0);
+  const [typedText, setTypedText] = useState("");
+  const [isTyping, setIsTyping] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const askButtonRef = useRef<HTMLButtonElement | null>(null);
   const readerRef = useRef<ReadableStreamDefaultReader | null>(null);
+
+  const placeholderTexts = [
+    "that song about a roof in New York?",
+    "the one that goes yeah yeah yeah",
+    "song with the guitar solo",
+    "early 2000s rock song",
+    "that catchy chorus from TikTok",
+    "the song from that movie",
+    "upbeat song with drums"
+  ];
 
   useEffect(() => {
     const token = localStorage.getItem('spotify_access_token');
@@ -304,6 +318,47 @@ export default function Home() {
     setIsAuthenticated(!!token);
     setLoading(false);
   }, []);
+
+  // Typing animation effect
+  useEffect(() => {
+    if (search.trim()) {
+      setTypedText("");
+      return; // Don't animate when user is typing
+    }
+
+    const currentText = placeholderTexts[currentPlaceholderIndex];
+    let timeout: NodeJS.Timeout;
+
+    if (isTyping && !isDeleting) {
+      // Typing characters
+      if (typedText.length < currentText.length) {
+        timeout = setTimeout(() => {
+          setTypedText(currentText.slice(0, typedText.length + 1));
+        }, 50 + Math.random() * 100); // Variable typing speed (50-150ms)
+      } else {
+        // Finished typing, wait then start deleting
+        timeout = setTimeout(() => {
+          setIsDeleting(true);
+        }, 2000); // Pause for 2 seconds when done typing
+      }
+    } else if (isDeleting) {
+      // Deleting characters
+      if (typedText.length > 0) {
+        timeout = setTimeout(() => {
+          setTypedText(typedText.slice(0, -1));
+        }, 30 + Math.random() * 50); // Faster deleting (30-80ms)
+      } else {
+        // Finished deleting, move to next placeholder
+        setIsDeleting(false);
+        setCurrentPlaceholderIndex((prev) => (prev + 1) % placeholderTexts.length);
+        setTimeout(() => {
+          setIsTyping(true);
+        }, 300); // Short pause before starting next text
+      }
+    }
+
+    return () => clearTimeout(timeout);
+  }, [search, typedText, isTyping, isDeleting, currentPlaceholderIndex, placeholderTexts]);
 
   useEffect(() => {
     if (!showAuthDropdown) return;
@@ -674,7 +729,7 @@ export default function Home() {
           <input
             type="text"
             className="flex-1 min-w-0 bg-transparent outline-none px-3 py-2 text-base md:text-lg text-[#502D07] placeholder-[#838D5A] font-roobert"
-            placeholder="that song about a roof in New York?"
+            placeholder={typedText + (isTyping && !isDeleting ? "|" : "")}
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
