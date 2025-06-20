@@ -1,0 +1,204 @@
+/* SF Pro Font Family */
+@font-face {
+  font-family: 'SF Pro';
+  src: url('/fonts/SF-Pro/SF-Pro.woff2') format('woff2'),
+       url('/fonts/SF-Pro/SF-Pro.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro';
+  src: url('/fonts/SF-Pro/SF-Pro-Italic.woff2') format('woff2'),
+       url('/fonts/SF-Pro/SF-Pro-Italic.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* SF Pro Display variants */
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('/fonts/SF-Pro/SF-Pro-Display-Regular.woff2') format('woff2'),
+       url('/fonts/SF-Pro/SF-Pro-Display-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('/fonts/SF-Pro/SF-Pro-Display-Medium.woff2') format('woff2'),
+       url('/fonts/SF-Pro/SF-Pro-Display-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('/fonts/SF-Pro/SF-Pro-Display-Bold.woff2') format('woff2'),
+       url('/fonts/SF-Pro/SF-Pro-Display-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Proxima Nova Font Family */
+@font-face {
+  font-family: 'Proxima Nova';
+  src: url('/fonts/proximanova/proximanova-regular-webfont.woff2') format('woff2'),
+       url('/fonts/proximanova/proximanova-regular-webfont.woff') format('woff'),
+       url('/fonts/proximanova/proximanova-regular-webfont.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Proxima Nova';
+  src: url('/fonts/proximanova/proximanova-bold-webfont.woff2') format('woff2'),
+       url('/fonts/proximanova/proximanova-bold-webfont.woff') format('woff'),
+       url('/fonts/proximanova/proximanova-bold-webfont.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Proxima Nova';
+  src: url('/fonts/proximanova/proximanova-extrabold-webfont.woff2') format('woff2'),
+       url('/fonts/proximanova/proximanova-extrabold-webfont.woff') format('woff'),
+       url('/fonts/proximanova/proximanova-extrabold-webfont.ttf') format('truetype');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Proxima Nova';
+  src: url('/fonts/proximanova/proximanova-semibold-webfont.woff2') format('woff2'),
+       url('/fonts/proximanova/proximanova-semibold-webfont.woff') format('woff'),
+       url('/fonts/proximanova/proximanova-semibold-webfont.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Proxima Nova';
+  src: url('/fonts/proximanova/proximanova-light-webfont.woff2') format('woff2'),
+       url('/fonts/proximanova/proximanova-light-webfont.woff') format('woff'),
+       url('/fonts/proximanova/proximanova-light-webfont.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Rubik Font Family */
+@font-face {
+  font-family: 'Rubik';
+  src: url('/fonts/Rubik/Rubik-VariableFont_wght.woff2') format('woff2'),
+       url('/fonts/Rubik/Rubik-VariableFont_wght.ttf') format('truetype');
+  font-weight: 300 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Rubik';
+  src: url('/fonts/Rubik/Rubik-Italic-VariableFont_wght.woff2') format('woff2'),
+       url('/fonts/Rubik/Rubik-Italic-VariableFont_wght.ttf') format('truetype');
+  font-weight: 300 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Plus Jakarta Sans Font Family */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('/fonts/Plus_Jakarta_Sans/PlusJakartaSans-VariableFont_wght.woff2') format('woff2'),
+       url('/fonts/Plus_Jakarta_Sans/PlusJakartaSans-VariableFont_wght.ttf') format('truetype');
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('/fonts/Plus_Jakarta_Sans/PlusJakartaSans-Italic-VariableFont_wght.woff2') format('woff2'),
+       url('/fonts/Plus_Jakarta_Sans/PlusJakartaSans-Italic-VariableFont_wght.ttf') format('truetype');
+  font-weight: 200 800;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Roobert Font Family */
+@font-face {
+  font-family: 'Roobert';
+  src: url('/fonts/Roobert/RoobertUprightsVF.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Manrope Font Family */
+@font-face {
+  font-family: 'Manrope';
+  src: url('/fonts/Manrope (1)/Manrope-VariableFont_wght.woff2') format('woff2'),
+       url('/fonts/Manrope (1)/Manrope-VariableFont_wght.ttf') format('truetype');
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Playwrite CU Font Family */
+@font-face {
+  font-family: 'Playwrite CU';
+  src: url('/fonts/Playwrite_CU/PlaywriteCU-VariableFont_wght.woff2') format('woff2'),
+       url('/fonts/Playwrite_CU/PlaywriteCU-VariableFont_wght.ttf') format('truetype');
+  font-weight: 100 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* DynaPuff Font Family */
+@font-face {
+  font-family: 'DynaPuff';
+  src: url('/fonts/DynaPuff/DynaPuff-VariableFont_wdth,wght.woff2') format('woff2'),
+       url('/fonts/DynaPuff/DynaPuff-VariableFont_wdth,wght.ttf') format('truetype');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Chewy Font Family */
+@font-face {
+  font-family: 'Chewy';
+  src: url('/fonts/Chewy/Chewy-Regular.woff2') format('woff2'),
+       url('/fonts/Chewy/Chewy-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Cherry Bomb One Font Family */
+@font-face {
+  font-family: 'Cherry Bomb One';
+  src: url('/fonts/Cherry_Bomb_One/CherryBombOne-Regular.woff2') format('woff2'),
+       url('/fonts/Cherry_Bomb_One/CherryBombOne-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Doto Font Family */
+@font-face {
+  font-family: 'Doto';
+  src: url('/fonts/Doto/Doto-VariableFont_ROND,wght.woff2') format('woff2'),
+       url('/fonts/Doto/Doto-VariableFont_ROND,wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+} 

@@ -8,7 +8,8 @@
 /* SF Pro */
 @font-face {
   font-family: 'SF Pro';
-  src: url('/fonts/SF-Pro/SF-Pro.ttf') format('truetype');
+  src: url('/fonts/SF-Pro/SF-Pro.woff2') format('woff2'),
+       url('/fonts/SF-Pro/SF-Pro.ttf') format('truetype');
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
