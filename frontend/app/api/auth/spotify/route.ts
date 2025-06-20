@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   const q = url.searchParams.get('q');
   
   // Encode q and start_search in state parameter
-  const stateData: any = {};
+  const stateData: { q?: string; start_search?: boolean } = {};
   if (q) {
     stateData.q = encodeURIComponent(q);
     stateData.start_search = true; // Always set to true when q is present

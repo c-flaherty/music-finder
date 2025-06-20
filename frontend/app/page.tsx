@@ -1,6 +1,6 @@
 "use client";
 import Image from "next/image";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from 'next/navigation';
 import localFont from 'next/font/local';
 
@@ -237,9 +237,11 @@ const SpotifyPreviewImage = ({
           <Image src="/logos/cannoli.png" alt="Cannoli logo" width={32} height={32} className="opacity-60" />
         </div>
       ) : imageUrl ? (
-        <img
+        <Image
           src={imageUrl}
           alt={`${songName} album cover`}
+          width={144}
+          height={144}
           className="w-full h-full object-cover"
           onError={(e) => {
             e.currentTarget.style.display = 'none';
@@ -292,7 +294,7 @@ export default function Home() {
   const askButtonRef = useRef<HTMLButtonElement | null>(null);
   const readerRef = useRef<ReadableStreamDefaultReader | null>(null);
 
-  const placeholderTexts = [
+  const placeholderTexts = useMemo(() => [
     "that song about a roof in New York?",
     "the one that goes yeah yeah yeah",
     "song with the guitar solo",
@@ -300,7 +302,7 @@ export default function Home() {
     "that catchy chorus from TikTok",
     "the song from that movie",
     "upbeat song with drums"
-  ];
+  ], []);
 
   useEffect(() => {
     const token = localStorage.getItem('spotify_access_token');
@@ -444,10 +446,6 @@ export default function Home() {
       setShouldAutoSearch(false); // Reset the flag
       // Trigger search programmatically by calling the search logic directly
       const triggerSearch = async () => {
-        const fakeEvent = { 
-          preventDefault: () => {} 
-        } as React.FormEvent;
-        
         // We need to call handleSearch but it's not in scope here
         // So we'll dispatch a form submission event instead
         const form = document.querySelector('form[data-search-form]');
