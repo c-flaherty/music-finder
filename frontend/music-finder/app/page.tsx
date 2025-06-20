@@ -685,7 +685,7 @@ export default function Home() {
             disabled={!search.trim()}
             ref={askButtonRef}
           >
-            {isSearching ? 'Searching...' : 'Ask'}
+            {isSearching ? 'Searching...' : 'Find song'}
           </button>
           {showAuthDropdown && !isAuthenticated && (
             <div
@@ -732,7 +732,7 @@ export default function Home() {
           <div className="bg-white border border-[#DDCDA8] rounded-2xl shadow-md p-4 md:p-6 transform transition-all duration-300 ease-out animate-slideDown">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-['Proxima_Nova'] font-extrabold text-[#502D07]">
-                {showProgress ? 'Processing songs...' : 'Starting search...'}
+                {showProgress ? 'Searching your library...' : 'Analyzing your new songs...'}
               </h3>
               <span className="text-sm text-[#838D5A] font-roobert animate-pulse">
                 {showProgress ? `${Math.round((progress / total) * 100)}%` : '...'}
@@ -744,9 +744,6 @@ export default function Home() {
                 style={{ width: `${total > 0 ? (progress / total) * 100 : 0}%` }}
               />
             </div>
-            <p className="text-xs text-[#838D5A] mt-2 font-roobert">
-              {showProgress ? 'Enriching songs with lyrics and metadata...' : 'Connecting to Spotify and preparing search...'}
-            </p>
           </div>
         </section>
       )}
