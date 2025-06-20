@@ -282,6 +282,7 @@ export default function Home() {
   const [total, setTotal] = useState(0);
   const [showProgress, setShowProgress] = useState(false);
   const [showTokenUsage, setShowTokenUsage] = useState(false);
+  const [message, setMessage] = useState("");
   const [currentPlaceholderIndex, setCurrentPlaceholderIndex] = useState(0);
   const [typedText, setTypedText] = useState("");
   const [isTyping, setIsTyping] = useState(true);
@@ -437,6 +438,7 @@ export default function Home() {
     setProgress(0);
     setTotal(0);
     setSearchResults([]);
+    setMessage("Fetching Cannoli...");
 
     console.log('hi3');
 
@@ -570,6 +572,7 @@ export default function Home() {
                   if (data.type === 'progress') {
                     setProgress(data.processed);
                     setTotal(data.total);
+                    setMessage(data.message);
                     setShowProgress(true);
                   } else if (data.type === 'results') {
                     console.log('Search response data:', data);
@@ -580,6 +583,9 @@ export default function Home() {
                   } else if (data.type === 'error') {
                     console.error('Error:', data);
                     throw new Error(data.error);
+                  }
+                  else if (data.type === 'status') {
+                    console.log('Status:', data);
                   }
                 } catch (parseError) {
                   console.error('Error parsing SSE message:', parseError);
@@ -849,11 +855,8 @@ export default function Home() {
           {/* Progress text */}
           <div className="text-center">
             <h3 className="text-lg font-['Proxima_Nova'] font-extrabold text-[#502D07] mb-2">
-              {showProgress ? 'Searching your library...' : 'Analyzing your new songs...'}
+              {message}
             </h3>
-            <p className="text-base text-[#838D5A] font-roobert">
-              {showProgress ? `${progress} out of ${total} songs processed` : 'Getting ready...'}
-            </p>
           </div>
         </section>
       )}

@@ -29,7 +29,7 @@ from search_library.clients import get_client
 from search_library.prompts import get_song_metadata_query
 from search_library.clients import TextPrompt
 
-SET_MAX_SONGS_FORR_DEBUG: int | None = 2000
+SET_MAX_SONGS_FORR_DEBUG: int | None = 10
 
 # --------------------------- Lyrics helper ---------------------------
 def get_lyrics(song_name: str, artist_names: list[str]) -> str:
@@ -150,7 +150,7 @@ def get_songs_from_playlists(playlists_data: Dict, access_token: str, query: str
                 id=track_data['id'],
                 song_link=track_data['external_urls']['spotify'],
                 name=track_data['name'],
-                artists=[artist['name'] for artist in track_data['artists']],
+                artists=[artist['name'] for artist in track_data['artists'] if artist['name'] is not None],
                 album=track_data['album']['name'],
             )
             all_songs.append(track)
@@ -169,9 +169,8 @@ def get_songs_from_playlists(playlists_data: Dict, access_token: str, query: str
 
     return unique_songs
 
-def enrich_songs(songs: list[RawSong], progress_callback=None) -> list[SearchSong]:
-    """Enrich raw songs with lyrics and metadata in parallel."""
-    enriched = []
+def enrich_songs(songs: list[RawSong]):
+    """Enrich raw songs with lyrics and metadata in parallel, yielding results as they complete."""
     processed_count = 0
     total_count = len(songs)
     lyrics_success_count = 0
@@ -200,12 +199,8 @@ def enrich_songs(songs: list[RawSong], progress_callback=None) -> list[SearchSon
             )
     
     if not songs:
-        return enriched
-    
-    # Send initial progress
-    if progress_callback:
-        progress_callback(0, total_count)
-    
+        return
+
     # Process songs in parallel with a reasonable number of workers
     max_workers = min(50, len(songs))
     last_emit_time = time.time()
@@ -214,44 +209,24 @@ def enrich_songs(songs: list[RawSong], progress_callback=None) -> list[SearchSon
         # Submit all enrichment tasks
         future_to_song = {executor.submit(enrich_single_song, song): song for song in songs}
         
-        # Collect results as they complete
+        # Collect results as they complete and yield them
         for future in as_completed(future_to_song):
             try:
                 enriched_song = future.result()
-                enriched.append(enriched_song)
                 if enriched_song.lyrics:
                     lyrics_success_count += 1
+                yield enriched_song
             except Exception as e:
                 song = future_to_song[future]
                 print(f"[LYRICS FAIL] {song.name} - {', '.join(song.artists)} (error: {e})")
-                enriched.append(SearchSong(
+                yield SearchSong(
                     **song.__dict__,
                     lyrics="these are some lyrics",
                     song_metadata="this is a song deep-dive"
-                ))
+                )
             
             processed_count += 1
-            current_time = time.time()
-            
-            # Emit progress update every 2 seconds or on completion, or every song for small batches
-            should_emit = (
-                progress_callback and (
-                    current_time - last_emit_time >= 2 or # Every 2 seconds
-                    processed_count == total_count or # On completion
-                    total_count <= 5 # Always emit for small batches
-                )
-            )
-            
-            if should_emit:
-                progress_callback(processed_count, total_count)
-                last_emit_time = current_time
-        
-        # Ensure final completion is always emitted
-        if progress_callback and processed_count == total_count:
-            progress_callback(processed_count, total_count)
-    
     print(f"[LYRICS SUMMARY] Processed {total_count} songs, got lyrics for {lyrics_success_count} songs.")
-    return enriched
 
 def get_playlist_names_internal(access_token: str, refresh_token: str = None) -> tuple[Dict, str]:
     """
@@ -585,24 +560,31 @@ async def spotify_search(
             unprocessed_raw_songs = raw_songs
             
             # Calculate total progress steps: song processing + LLM search + result processing
-            total_progress_steps = len(unprocessed_raw_songs) + 2  # +2 for LLM search and result processing
+            total_progress_steps = len(unprocessed_raw_songs) + 2  # +1 for LLM search
             
             # Emit initial progress
-            yield f"data: {json.dumps({'type': 'progress', 'processed': 0, 'total': total_progress_steps})}\n\n"
+            yield f"data: {json.dumps({'type': 'progress', 'processed': 0, 'total': total_progress_steps, 'message': f'Cannoli is listening to your music...'})}\n\n"
             await asyncio.sleep(0.1)
+
             
             # Process songs with progress updates (song processing takes most of the progress)
-            enriched_songs = enrich_songs(unprocessed_raw_songs, progress_callback=None)
+            enriched_songs = []
+            perc5_unprocessed_songs_ct = max(len(unprocessed_raw_songs) // 20, 1)
+            for song in enrich_songs(unprocessed_raw_songs):
+                enriched_songs.append(song)
+                if len(enriched_songs) % perc5_unprocessed_songs_ct == 0:
+                    yield f"data: {json.dumps({'type': 'progress', 'processed': len(enriched_songs), 'total': total_progress_steps, 'message': f'Cannoli has listened to {len(enriched_songs)} out of {len(unprocessed_raw_songs)} new songs...'})}\n\n"
+                    await asyncio.sleep(0.1)
             
             # Combine all enriched songs
             all_enriched_songs = already_processed_enriched_songs + enriched_songs
             
-            yield f"data: {json.dumps({'type': 'status', 'message': 'Searching through your music...'})}\n\n"
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Cannoli is searching through your music...'})}\n\n"
             await asyncio.sleep(0.1)
             
             # Update progress for LLM search step
             llm_search_progress = len(unprocessed_raw_songs) + 1
-            yield f"data: {json.dumps({'type': 'progress', 'processed': llm_search_progress, 'total': total_progress_steps})}\n\n"
+            yield f"data: {json.dumps({'type': 'progress', 'processed': llm_search_progress, 'total': total_progress_steps, 'message': f'Cannoli is analyzing your music...'})}\n\n"
             await asyncio.sleep(0.1)
             
             # Search through the enriched songs using LLM
@@ -615,9 +597,9 @@ async def spotify_search(
             await asyncio.sleep(0.1)
             
             # Update progress for result processing step
-            final_progress = len(unprocessed_raw_songs) + 2
-            yield f"data: {json.dumps({'type': 'progress', 'processed': final_progress, 'total': total_progress_steps})}\n\n"
-            await asyncio.sleep(0.1)
+            #final_progress = len(unprocessed_raw_songs) + 2
+            #yield f"data: {json.dumps({'type': 'progress', 'processed': final_progress, 'total': total_progress_steps, 'message': f'Done!'})}\n\n"
+            #await asyncio.sleep(0.1)
             
             # Convert Song objects to dictionaries for JSON serialization
             result_dicts = []
