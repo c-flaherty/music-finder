@@ -331,9 +331,9 @@ export default function Home() {
     if (isTyping && !isDeleting) {
       // Typing characters
       if (typedText.length < currentText.length) {
-        timeout = setTimeout(() => {
-          setTypedText(currentText.slice(0, typedText.length + 1));
-        }, 50 + Math.random() * 100); // Variable typing speed (50-150ms)
+              timeout = setTimeout(() => {
+        setTypedText(currentText.slice(0, typedText.length + 1));
+      }, 25 + Math.random() * 50); // Variable typing speed (25-75ms) - twice as fast
       } else {
         // Finished typing, wait then start deleting
         timeout = setTimeout(() => {
@@ -343,9 +343,9 @@ export default function Home() {
     } else if (isDeleting) {
       // Deleting characters
       if (typedText.length > 0) {
-        timeout = setTimeout(() => {
-          setTypedText(typedText.slice(0, -1));
-        }, 30 + Math.random() * 50); // Faster deleting (30-80ms)
+              timeout = setTimeout(() => {
+        setTypedText(typedText.slice(0, -1));
+      }, 15 + Math.random() * 25); // Faster deleting (15-40ms) - twice as fast
       } else {
         // Finished deleting, move to next placeholder
         setIsDeleting(false);
