@@ -681,10 +681,10 @@ export default function Home() {
                   rel="noopener noreferrer"
                   className="block"
                 >
-                  <div className={`flex flex-col gap-3 p-4 bg-[#FFF5D1] rounded-lg hover:bg-[#DDCDA8] transition-colors cursor-pointer group animate-fadeInUp animate-stagger-${Math.min(index + 1, 5)}`}>
+                  <div className={`flex flex-col gap-3 p-4 bg-[#FFF5D1] rounded-lg  hover:shadow-md hover:-translate-y-0.5 transition-all duration-100 cursor-pointer group animate-fadeInUp animate-stagger-${Math.min(index + 1, 5)}`}>
                     <div className="flex items-center gap-4">
                       <div className="flex-1">
-                        <h3 className="font-['Proxima_Nova'] font-extrabold text-[#502D07] group-hover:text-[#F6A23B] transition-colors">
+                        <h3 className="font-['Proxima_Nova'] font-extrabold text-[#502D07] group-hover:text-[#a15b10] transition-colors">
                           {song.name}
                         </h3>
                         <p className="text-sm text-[#838D5A]">
