@@ -687,6 +687,19 @@ export default function Home() {
           }
         }
         
+        @keyframes jitter {
+          0%, 100% { transform: translate(0, 0) rotate(0deg); }
+          10% { transform: translate(-5px, -5px) rotate(-1deg); }
+          20% { transform: translate(5px, -5px) rotate(1deg); }
+          30% { transform: translate(-5px, 5px) rotate(0deg); }
+          40% { transform: translate(5px, 5px) rotate(1deg); }
+          50% { transform: translate(-5px, -5px) rotate(-1deg); }
+          60% { transform: translate(5px, -5px) rotate(0deg); }
+          70% { transform: translate(-5px, 5px) rotate(-1deg); }
+          80% { transform: translate(5px, 5px) rotate(1deg); }
+          90% { transform: translate(-5px, -5px) rotate(0deg); }
+        }
+        
         .animate-fadeIn {
           animation: fadeIn 0.3s ease-out;
         }
@@ -703,6 +716,10 @@ export default function Home() {
         
         .animate-fadeInUp {
           animation: fadeInUp 0.5s ease-out;
+        }
+        
+        .animate-jitter {
+          animation: jitter 1s infinite;
         }
         
         .animate-stagger-1 { animation-delay: 0.1s; }
@@ -783,22 +800,63 @@ export default function Home() {
 
       {/* Progress Bar */}
       {isSearching && (
-        <section className="w-full max-w-2xl mx-auto mb-6 px-4 animate-fadeIn">
-          <div className="bg-white border border-[#DDCDA8] rounded-2xl shadow-md p-4 md:p-6 transform transition-all duration-300 ease-out animate-slideDown">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-['Proxima_Nova'] font-extrabold text-[#502D07]">
-                {showProgress ? 'Searching your library...' : 'Analyzing your new songs...'}
-              </h3>
-              <span className="text-sm text-[#838D5A] font-roobert animate-pulse">
-                {showProgress ? `${Math.round((progress / total) * 100)}%` : '...'}
-              </span>
-            </div>
-            <div className="w-full bg-[#F7F7F7] rounded-full h-3 overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-[#01D75E] to-[#01c055] rounded-full transition-all duration-500 ease-out animate-shimmer"
-                style={{ width: `${total > 0 ? (progress / total) * 100 : 0}%` }}
+        <section className="w-full max-w-2xl mx-auto mb-6 px-4 animate-fadeIn flex flex-col items-center">
+          {/* Circular Progress with Cannoli */}
+          <div className="relative mb-6">
+            <svg
+              className="w-48 h-48 md:w-56 md:h-56 transform -rotate-90"
+              viewBox="0 0 160 160"
+            >
+              {/* Background circle */}
+              <circle
+                cx="80"
+                cy="80"
+                r="70"
+                stroke="#F7F7F7"
+                strokeWidth="8"
+                fill="none"
+              />
+              {/* Progress circle */}
+              <circle
+                cx="80"
+                cy="80"
+                r="70"
+                stroke="url(#progressGradient)"
+                strokeWidth="8"
+                fill="none"
+                strokeLinecap="round"
+                strokeDasharray={`${2 * Math.PI * 70}`}
+                strokeDashoffset={`${2 * Math.PI * 70 * (1 - (total > 0 ? progress / total : 0))}`}
+                className="transition-all duration-500 ease-out"
+              />
+              <defs>
+                <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#01D75E" />
+                  <stop offset="100%" stopColor="#01c055" />
+                </linearGradient>
+              </defs>
+            </svg>
+            
+            {/* Cannoli image with jitter animation */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Image 
+                src="/logos/cannoli.png" 
+                alt="Cannoli logo" 
+                width={144} 
+                height={144} 
+                className="animate-jitter"
               />
             </div>
+          </div>
+          
+          {/* Progress text */}
+          <div className="text-center">
+            <h3 className="text-lg font-['Proxima_Nova'] font-extrabold text-[#502D07] mb-2">
+              {showProgress ? 'Searching your library...' : 'Analyzing your new songs...'}
+            </h3>
+            <p className="text-base text-[#838D5A] font-roobert">
+              {showProgress ? `${progress} out of ${total} songs processed` : 'Getting ready...'}
+            </p>
           </div>
         </section>
       )}
@@ -806,68 +864,71 @@ export default function Home() {
       {/* Search Results */}
       {searchResults.length > 0 && (
         <section className="w-full max-w-2xl mx-auto mb-12 md:mb-20 px-4 animate-fadeIn">
-          <div className="bg-white border border-[#DDCDA8] rounded-2xl shadow-md p-4 md:p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-['Proxima_Nova'] font-extrabold text-[#502D07]">Search Results</h2>
-              
-              {/* Token Usage Toggle Button */}
-              {tokenUsage && (
-                <button
-                  onClick={() => setShowTokenUsage(!showTokenUsage)}
-                  className="flex items-center gap-2 text-sm text-[#838D5A] hover:text-[#502D07] font-medium transition-colors"
+          {/* Header and Analytics */}
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-['Proxima_Nova'] font-extrabold text-[#502D07]">SEARCH RESULTS</h2>
+            
+            {/* Token Usage Toggle Button */}
+            {tokenUsage && (
+              <button
+                onClick={() => setShowTokenUsage(!showTokenUsage)}
+                className="flex items-center gap-2 text-sm text-[#838D5A] hover:text-[#502D07] font-medium transition-colors"
+              >
+                🔍 Search Analytics
+                <svg 
+                  className={`w-4 h-4 transition-transform ${showTokenUsage ? 'rotate-180' : ''}`} 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
                 >
-                  🔍 Search Analytics
-                  <svg 
-                    className={`w-4 h-4 transition-transform ${showTokenUsage ? 'rotate-180' : ''}`} 
-                    fill="none" 
-                    stroke="currentColor" 
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-              )}
-            </div>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            )}
+          </div>
 
-            {/* Token Usage Display */}
-            {tokenUsage && showTokenUsage && <TokenUsageDisplay tokenUsage={tokenUsage} />}
+          {/* Divider */}
+          <div className="w-full h-px bg-[#DDCDA8] mb-6"></div>
 
-            <div className="space-y-4">
-              {searchResults.map((song, index) => (
-                <a
-                  key={song.id}
-                  href={song.song_link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block"
-                >
-                  <div className={`flex flex-col p-4 bg-[#FFF5D1] rounded-lg hover:shadow-md hover:-translate-y-0.5 transition-all duration-100 cursor-pointer group animate-fadeInUp animate-stagger-${Math.min(index + 1, 5)}`}>
+          {/* Token Usage Display */}
+          {tokenUsage && showTokenUsage && <TokenUsageDisplay tokenUsage={tokenUsage} />}
 
-                    <div className="flex flex-row gap-4">
-                      {/* Album Image */}
-                      <div className="flex-shrink-0">
-                        <SpotifyPreviewImage spotifyUrl={song.song_link} songName={song.name} title={song.name} artist={song.artists.join(', ')} />
-                      </div>
+          {/* Song Cards */}
+          <div className="space-y-4">
+            {searchResults.map((song, index) => (
+              <a
+                key={song.id}
+                href={song.song_link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block"
+              >
+                <div className={`flex flex-col p-4 md:p-6 bg-white border border-[#DDCDA8] rounded-2xl shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-100 cursor-pointer group animate-fadeInUp animate-stagger-${Math.min(index + 1, 5)}`}>
 
-                      {/* Content */}
-                      <div className="flex-1 flex flex-col gap-3 min-w-0">
-                        {/* Reasoning */}
-                        {song.reasoning && (
-                          <div className="rounded-lg p-3">
-                            <p className="text-sm text-[#502D07] font-medium">
-                              {song.reasoning}
-                            </p>
-                          </div>
-                        )}
+                  <div className="flex flex-row gap-4">
+                    {/* Album Image */}
+                    <div className="flex-shrink-0">
+                      <SpotifyPreviewImage spotifyUrl={song.song_link} songName={song.name} title={song.name} artist={song.artists.join(', ')} />
+                    </div>
 
-                        {/* Lyrics */}
-                        <LyricsDisplay lyrics={song.lyrics} />
-                      </div>
+                    {/* Content */}
+                    <div className="flex-1 flex flex-col gap-3 min-w-0">
+                      {/* Reasoning */}
+                      {song.reasoning && (
+                        <div className="rounded-lg p-3">
+                          <p className="text-sm text-[#502D07] font-medium">
+                            {song.reasoning}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Lyrics */}
+                      <LyricsDisplay lyrics={song.lyrics} />
                     </div>
                   </div>
-                </a>
-              ))}
-            </div>
+                </div>
+              </a>
+            ))}
           </div>
         </section>
       )}
