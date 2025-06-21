@@ -24,7 +24,7 @@ from search_library.clients import TextPrompt
 supabase_url = os.getenv('SUPABASE_URL')
 supabase_service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
-SET_MAX_SONGS_FORR_DEBUG: int | None = 100
+SET_MAX_SONGS_FORR_DEBUG: int | None = None
 
 # --------------------------- Lyrics helper ---------------------------
 def get_lyrics(song_name: str, artist_names: list[str]) -> str:
@@ -310,8 +310,8 @@ def enrich_songs(songs: list[RawSong]):
         token_usage = {}
         try:
             ## Commented out for now to test frontend quickly
-            # lyrics = get_lyrics(song.name, song.artists)
-            # song_metadata, token_usage = get_song_metadata(song.name, song.artists)
+            lyrics = get_lyrics(song.name, song.artists)
+            song_metadata, token_usage = get_song_metadata(song.name, song.artists)
             # if lyrics:
             #     print(f"[LYRICS SUCCESS] {song.name} - {', '.join(song.artists)}")
             # else:

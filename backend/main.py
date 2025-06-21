@@ -290,10 +290,8 @@ async def spotify_search(
             await asyncio.sleep(0.1)
             
             # Check database for already processed songs
-            #already_processed_enriched_songs, unprocessed_raw_songs = fetch_already_processed_enriched_songs(raw_songs)
-            unprocessed_raw_songs = raw_songs
-            already_processed_enriched_songs = []
-            
+            already_processed_enriched_songs, unprocessed_raw_songs = fetch_already_processed_enriched_songs(raw_songs)
+
             # Calculate total progress steps: song processing + LLM search + result processing
             total_progress_steps = len(unprocessed_raw_songs) + 2  # +1 for LLM search
             
@@ -330,7 +328,7 @@ async def spotify_search(
                         last_yield_time = current_time
                 
                 # Save newly enriched songs to database
-                #save_enriched_songs_to_db(enriched_songs)
+                save_enriched_songs_to_db(enriched_songs)
             
             # Combine all enriched songs
             all_enriched_songs = already_processed_enriched_songs + enriched_songs
