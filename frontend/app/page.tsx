@@ -307,6 +307,7 @@ export default function Home() {
   const [pseudoProgress, setPseudoProgress] = useState(0);
   const [targetProgress, setTargetProgress] = useState(0);
   const currentAnimatedProgressRef = useRef(0); // Track current animated progress locally
+  const [showLargeBatchAlert, setShowLargeBatchAlert] = useState(false);
 
   const placeholderTexts = useMemo(() => [
     "that song about a roof in New York?",
@@ -593,6 +594,7 @@ export default function Home() {
     setPseudoProgress(0);
     setTargetProgress(0);
     currentAnimatedProgressRef.current = 0; // Reset ref
+    setShowLargeBatchAlert(false); // Reset alert
     
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
@@ -726,6 +728,12 @@ export default function Home() {
                         // Initial guess: assume 1 item per second
                         const initialAvgDelta = Math.max(1000, (newTotal * 1000) / 60); // At least 1s, max 1 min per item
                         setAvgDelta(initialAvgDelta);
+                        
+                        // Show large batch alert if more than 250 songs
+                        if (newTotal > 250) {
+                          setShowLargeBatchAlert(true);
+                        }
+                        
                         return newTotal; // Add 10% buffer so progress never exceeds 90%
                       }
                       return prevTotalEvents;
@@ -1107,6 +1115,15 @@ export default function Home() {
             <h3 className={`text-lg font-['Proxima_Nova'] font-extrabold text-[#502D07] mb-2 transition-opacity duration-200 ${messageAnimating ? 'animate-messageOut' : 'opacity-100'}`}>
               {displayMessage}
             </h3>
+            
+            {/* Large batch alert */}
+            {showLargeBatchAlert && (
+              <div className="mt-4 p-4 bg-[#FFF5D1] border-2 border-[#F6A23B] rounded-xl animate-fadeIn">
+                <p className="text-sm text-[#502D07] font-medium text-center leading-relaxed">
+                  <span className="text-base">🍃</span> You have a lot of songs Cannoli hasn't listened to yet. This may take a few minutes! Go watch some reels and come back soon pls.
+                </p>
+              </div>
+            )}
           </div>
         </section>
       )}
