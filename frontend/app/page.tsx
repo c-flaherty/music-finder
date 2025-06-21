@@ -890,6 +890,23 @@ export default function Home() {
                 textarea.style.height = 'auto';
                 textarea.style.height = Math.min(textarea.scrollHeight, 128) + 'px';
               }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  if (e.shiftKey) {
+                    // Shift+Enter: allow newline (default behavior)
+                    return;
+                  } else {
+                    // Enter alone: trigger search
+                    e.preventDefault();
+                    if (search.trim() && !isSearching) {
+                      const form = e.currentTarget.closest('form');
+                      if (form) {
+                        form.requestSubmit();
+                      }
+                    }
+                  }
+                }
+              }}
             />
           </div>
           <div className="flex justify-end">
