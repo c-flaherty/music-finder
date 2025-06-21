@@ -281,10 +281,18 @@ export default function Home() {
   const [isSearching, setIsSearching] = useState(false);
   const [showAuthDropdown, setShowAuthDropdown] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [animatedProgress, setAnimatedProgress] = useState(0);
   const [total, setTotal] = useState(0);
   const [showProgress, setShowProgress] = useState(false);
+  const [secondsPerSong, setSecondsPerSong] = useState<number | null>(null);
+  const [progressStartTime, setProgressStartTime] = useState<number | null>(null);
+  const animationRef = useRef<number | null>(null);
+  const animationStartTime = useRef<number | null>(null);
+  const animationStartProgress = useRef<number>(0);
   const [showTokenUsage, setShowTokenUsage] = useState(false);
   const [message, setMessage] = useState("");
+  const [displayMessage, setDisplayMessage] = useState("");
+  const [messageAnimating, setMessageAnimating] = useState(false);
   const [currentPlaceholderIndex, setCurrentPlaceholderIndex] = useState(0);
   const [typedText, setTypedText] = useState("");
   const [isTyping, setIsTyping] = useState(true);
@@ -459,6 +467,77 @@ export default function Home() {
     }
   }, [shouldAutoSearch, isAuthenticated, search, isSearching]);
 
+  // Message animation effect
+  useEffect(() => {
+    if (!message) {
+      setDisplayMessage("");
+      return;
+    }
+
+    if (displayMessage && message !== displayMessage) {
+      // Message changed, fade out old message then fade in new one
+      setMessageAnimating(true);
+      setTimeout(() => {
+        setDisplayMessage(message);
+        setMessageAnimating(false);
+      }, 200); // Duration matches fade out animation
+    } else {
+      // First time or same message
+      setDisplayMessage(message);
+    }
+  }, [message]); // Only depend on message, not displayMessage
+
+    // Smooth progress animation using sec/song from backend
+  useEffect(() => {
+    if (!secondsPerSong || !total || !progressStartTime) return;
+
+    // Clear any existing animation
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+    }
+
+    // Initialize animation starting point
+    if (!animationStartTime.current) {
+      animationStartTime.current = Date.now();
+      animationStartProgress.current = animatedProgress;
+    }
+
+    const animate = () => {
+      const timeElapsed = (Date.now() - progressStartTime) / 1000; // Convert to seconds
+      const animationElapsed = (Date.now() - animationStartTime.current!) / 1000;
+      
+      const boostedSecondsPerSong = secondsPerSong / 1.25; // 25% faster
+      const predictedProgress = Math.min(timeElapsed / boostedSecondsPerSong, total);
+      const targetProgressRatio = predictedProgress / total;
+      
+      // Smooth transition from starting progress to predicted progress
+      const transitionDuration = 1.0; // 1 second smooth transition
+      const transitionProgress = Math.min(animationElapsed / transitionDuration, 1);
+      const currentProgressRatio = animationStartProgress.current + 
+        (targetProgressRatio - animationStartProgress.current) * transitionProgress;
+      
+      // Halt at 90% until results arrive
+      const cappedProgressRatio = Math.min(currentProgressRatio, 0.9);
+      setAnimatedProgress(cappedProgressRatio);
+      
+      // Continue animation if we haven't reached 90%
+      if (cappedProgressRatio < 0.9) {
+        animationRef.current = requestAnimationFrame(animate);
+      } else {
+        animationRef.current = null;
+      }
+    };
+
+    animationRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+    };
+  }, [secondsPerSong, total, progressStartTime, progress]);
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!search.trim()) return;
@@ -466,7 +545,17 @@ export default function Home() {
     setIsSearching(true);
     setShowProgress(false);
     setProgress(0);
+    setAnimatedProgress(0);
     setTotal(0);
+    setProgressStartTime(Date.now());
+    setSecondsPerSong(null);
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+    // Reset animation refs
+    animationStartTime.current = null;
+    animationStartProgress.current = 0;
     setSearchResults([]);
     setMessage("Fetching Cannoli...");
 
@@ -594,12 +683,16 @@ export default function Home() {
                     setProgress(data.processed);
                     setTotal(data.total * 1.1); // add 10% buffer so it never looks done
                     setMessage(data.message);
+                    if (data['sec/song']) {
+                      setSecondsPerSong(data['sec/song']);
+                    }
                     setShowProgress(true);
                   } else if (data.type === 'results') {
                     console.log('Search response data:', data);
                     console.log('Token usage data:', data.token_usage);
                     setTokenUsage(data.token_usage || null);
                     setSearchResults(data.results || []);
+                    setAnimatedProgress(1.0); // Complete the progress bar
                     setShowProgress(false);
                   } else if (data.type === 'error') {
                     console.error('Error:', data);
@@ -629,6 +722,11 @@ export default function Home() {
       setShowProgress(false);
     } finally {
       setIsSearching(false);
+      // Clean up animation when search is done
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
     }
   };
 
@@ -711,6 +809,11 @@ export default function Home() {
           }
         }
         
+        @keyframes messageStay {
+          from { opacity: 1; }
+          to { opacity: 0; }
+        }
+        
         @keyframes jitter {
           0%, 100% { transform: translate(0, 0) rotate(0deg); }
           10% { transform: translate(-5px, -5px) rotate(-1deg); }
@@ -740,6 +843,10 @@ export default function Home() {
         
         .animate-fadeInUp {
           animation: fadeInUp 0.5s ease-out;
+        }
+        
+        .animate-messageOut {
+          animation: messageStay 0.2s ease-out forwards;
         }
         
         .animate-jitter {
@@ -862,8 +969,7 @@ export default function Home() {
                 fill="none"
                 strokeLinecap="round"
                 strokeDasharray={`${2 * Math.PI * 70}`}
-                strokeDashoffset={`${2 * Math.PI * 70 * (1 - (total > 0 ? progress / total : 0))}`}
-                className="transition-all duration-500 ease-out"
+                strokeDashoffset={`${2 * Math.PI * 70 * (1 - animatedProgress)}`}
               />
               <defs>
                 <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -887,8 +993,8 @@ export default function Home() {
           
           {/* Progress text */}
           <div className="text-center">
-            <h3 className="text-lg font-['Proxima_Nova'] font-extrabold text-[#502D07] mb-2">
-              {message}
+            <h3 className={`text-lg font-['Proxima_Nova'] font-extrabold text-[#502D07] mb-2 transition-opacity duration-200 ${messageAnimating ? 'animate-messageOut' : 'opacity-100'}`}>
+              {displayMessage}
             </h3>
           </div>
         </section>

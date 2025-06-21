@@ -240,6 +240,18 @@ async def test_ping():
         },
     )
 
+def get_progress_update_copy(processed: int, total: int, song: SearchSong):
+    schemas = [
+        "Cannoli is listening to your music...",
+        f"Just listened to {song.name} by {', '.join(song.artists)}! So good",
+        "Cannoli is taking a nap!",
+        "Cannoli is eating a snack!",
+        f"I'm {processed} songs in!",
+
+        *[f"Cannoli has listened to {processed} out of {total} new songs..."] * 10,
+    ]
+    return random.choice(schemas)
+
 @app.get("/api/spotify_search")
 async def spotify_search(
     query: str = Query(..., description="Search query for songs"),
@@ -278,7 +290,9 @@ async def spotify_search(
             await asyncio.sleep(0.1)
             
             # Check database for already processed songs
-            already_processed_enriched_songs, unprocessed_raw_songs = fetch_already_processed_enriched_songs(raw_songs)
+            #already_processed_enriched_songs, unprocessed_raw_songs = fetch_already_processed_enriched_songs(raw_songs)
+            unprocessed_raw_songs = raw_songs
+            already_processed_enriched_songs = []
             
             # Calculate total progress steps: song processing + LLM search + result processing
             total_progress_steps = len(unprocessed_raw_songs) + 2  # +1 for LLM search
@@ -296,26 +310,27 @@ async def spotify_search(
             }
             
             if unprocessed_raw_songs:
-                perc5_unprocessed_songs_ct = max(len(unprocessed_raw_songs) // 5, 10)
                 last_yield_time = time.time()
-                
-                for song, token_usage in enrich_songs(unprocessed_raw_songs):
+                durations = []
+                avg_song_time = 0.
+                for song, token_usage in enrich_songs(unprocessed_raw_songs):                
                     enriched_songs.append(song)
                     # Update token usage
                     total_enrichment_tokens = token_usage
+
+                    if len(durations) == 5:
+                        avg_song_time = (sum(durations) / len(durations)) / 3 # 3x speed to make the visual animation look better
                     
                     current_time = time.time()
-                    if len(enriched_songs) % perc5_unprocessed_songs_ct == 0 and current_time - last_yield_time >= 2:
-                        # with a 5% chance emit a progress update with the message
-                        # "Just listened to song.title by song.artist!"
-                        if random.random() < 0.05:
-                            yield f"data: {json.dumps({'type': 'progress', 'processed': len(enriched_songs), 'total': total_progress_steps, 'message': f'Just listened to {song.name} by {', '.join(song.artists)}...'})}\n\n"
-                        else:
-                            yield f"data: {json.dumps({'type': 'progress', 'processed': len(enriched_songs), 'total': total_progress_steps, 'message': f'Cannoli has listened to {len(enriched_songs)} out of {len(unprocessed_raw_songs)} new songs...'})}\n\n"
+                    durations.append(current_time - last_yield_time)
+                    if len(durations) > 5 and current_time - last_yield_time >= 1:
+                        progress_update_copy = get_progress_update_copy(len(enriched_songs), total_progress_steps, song)
+                        yield f"data: {json.dumps({'type': 'progress', 'processed': len(enriched_songs), 'total': total_progress_steps, 'message': progress_update_copy, 'sec/song': avg_song_time})}\n\n"
+                        await asyncio.sleep(0.1)
                         last_yield_time = current_time
                 
                 # Save newly enriched songs to database
-                save_enriched_songs_to_db(enriched_songs)
+                #save_enriched_songs_to_db(enriched_songs)
             
             # Combine all enriched songs
             all_enriched_songs = already_processed_enriched_songs + enriched_songs

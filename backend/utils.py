@@ -342,6 +342,7 @@ def enrich_songs(songs: list[RawSong]):
         
         # Collect results as they complete and yield them
         for future in as_completed(future_to_song):
+            time.sleep(random.uniform(0.5, 1))
             try:
                 enriched_song, token_usage = future.result()
                 if enriched_song.lyrics:
