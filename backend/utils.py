@@ -26,7 +26,7 @@ supabase_service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
 SKIP_EXPENSIVE_STEPS: bool = True
 SKIP_SUPABASE_CACHE: bool = True
-SET_MAX_SONGS_FORR_DEBUG: int | None = 100
+HARDCODE_SONG_COUNT: int | None = 50
 
 # --------------------------- Lyrics helper ---------------------------
 def get_lyrics(song_name: str, artist_names: list[str]) -> str:
@@ -180,14 +180,27 @@ def get_songs_from_playlists(playlists_data: Dict, access_token: str, query: str
             )
             all_songs.append(track)
 
-            if SET_MAX_SONGS_FORR_DEBUG and len(all_songs) >= SET_MAX_SONGS_FORR_DEBUG:
+            if HARDCODE_SONG_COUNT and len(all_songs) >= HARDCODE_SONG_COUNT:
                 break
         
-        if SET_MAX_SONGS_FORR_DEBUG and len(all_songs) >= SET_MAX_SONGS_FORR_DEBUG:
+        if HARDCODE_SONG_COUNT and len(all_songs) >= HARDCODE_SONG_COUNT:
             break
 
     # Remove duplicates
     unique_songs = list({song.id: song for song in all_songs}.values())
+
+    if HARDCODE_SONG_COUNT and len(unique_songs) < HARDCODE_SONG_COUNT:
+        def create_random_songs(count: int) -> list[RawSong]:
+            return [RawSong(
+                id=f"random-{i}",
+                name=f"Random Song {i}",
+                artists=[f"Artist {i}"],
+                album=f"Album {i}",
+                song_link=f"https://google.com"
+            ) for i in range(count)]
+
+        random_songs = create_random_songs(HARDCODE_SONG_COUNT - len(unique_songs))
+        unique_songs.extend(random_songs)
 
     # Debug: how many unique songs were collected
     print(f"[spotify_search] Collected {len(unique_songs)} unique tracks from playlists")

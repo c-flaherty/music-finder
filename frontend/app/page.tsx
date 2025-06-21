@@ -500,9 +500,10 @@ export default function Home() {
       return;
     }
 
-    // Clear any existing animation
+    // Clear any existing animation at the start of new search
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
     }
 
     const animate = (currentTime: number) => {
@@ -713,25 +714,33 @@ export default function Home() {
                     setProgress(newCompleted);
                     setTotal(newTotal);
                     
-                    // Initialize total events on first progress update
-                    if (totalEvents === 0 && newTotal > 0) {
-                      setTotalEvents(newTotal * 1.1); // Add 10% buffer so progress never exceeds 90%
-                      setLastFinishTime(now);
-                      // Initial guess: assume 1 item per second
-                      const initialAvgDelta = Math.max(1000, (newTotal * 1000) / 60); // At least 1s, max 1 min per item
-                      setAvgDelta(initialAvgDelta);
-                    }
+                    // Initialize total events on first progress update - use functional update to get current state
+                    setTotalEvents(prevTotalEvents => {
+                      if (prevTotalEvents === 0 && newTotal > 0) {
+                        setLastFinishTime(now);
+                        // Initial guess: assume 1 item per second
+                        const initialAvgDelta = Math.max(1000, (newTotal * 1000) / 60); // At least 1s, max 1 min per item
+                        setAvgDelta(initialAvgDelta);
+                        return newTotal * 1.1; // Add 10% buffer so progress never exceeds 90%
+                      }
+                      return prevTotalEvents;
+                    });
                     
                     // Update exponentially-smoothed average when events actually complete
-                    if (newCompleted > completedEvents) {
-                      if (lastFinishTime && completedEvents > 0) {
-                        const delta = now - lastFinishTime;
-                        const alpha = 0.2; // Tuning parameter for smoothing
-                        setAvgDelta(prevAvgDelta => alpha * delta + (1 - alpha) * prevAvgDelta);
+                    setCompletedEvents(prevCompletedEvents => {
+                      if (newCompleted > prevCompletedEvents) {
+                        setLastFinishTime(prevLastFinishTime => {
+                          if (prevLastFinishTime && prevCompletedEvents > 0) {
+                            const delta = now - prevLastFinishTime;
+                            const alpha = 0.2; // Tuning parameter for smoothing
+                            setAvgDelta(prevAvgDelta => alpha * delta + (1 - alpha) * prevAvgDelta);
+                          }
+                          return now;
+                        });
+                        return newCompleted;
                       }
-                      setLastFinishTime(now);
-                      setCompletedEvents(newCompleted);
-                    }
+                      return prevCompletedEvents;
+                    });
                     
                     if (data.message) {
                       setMessage(data.message);

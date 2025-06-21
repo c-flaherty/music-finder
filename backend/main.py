@@ -40,7 +40,6 @@ from utils import (
     enrich_songs,
     get_playlist_names,
     refresh_access_token,
-    SET_MAX_SONGS_FORR_DEBUG,
     SKIP_EXPENSIVE_STEPS,
     SKIP_SUPABASE_CACHE
 )
@@ -329,7 +328,7 @@ async def spotify_search(
 
                     current_time = time.time()
                     if current_time - last_yield_time >= 1:
-                        progress_update_copy = get_progress_update_copy(len(enriched_songs), total_progress_steps, song)
+                        progress_update_copy = get_progress_update_copy(len(enriched_songs), total_progress_steps - 2, song)
                         yield f"data: {json.dumps({'type': 'progress', 'processed': len(enriched_songs), 'total': total_progress_steps, 'message': progress_update_copy})}\n\n"
                         await asyncio.sleep(0.1)
                         last_yield_time = current_time
@@ -347,7 +346,7 @@ async def spotify_search(
                 for i in range(0, len(already_processed_enriched_songs), batch_size):
                     current_processed = min(i + batch_size, len(already_processed_enriched_songs))
                     song = already_processed_enriched_songs[min(i, len(already_processed_enriched_songs) - 1)]
-                    progress_update_copy = get_progress_update_copy(current_processed, total_progress_steps, song)
+                    progress_update_copy = get_progress_update_copy(current_processed, total_progress_steps - 2, song)
                     yield f"data: {json.dumps({'type': 'progress', 'processed': current_processed, 'total': total_progress_steps, 'message': progress_update_copy})}\n\n"
                     await asyncio.sleep(0.2)  # Slightly longer delay to make progress visible
 
