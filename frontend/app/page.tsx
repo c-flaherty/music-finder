@@ -9,6 +9,7 @@ import { roobert } from './fonts';
 import { LyricsDisplay } from './components/LyricsDisplay';
 import { TokenUsageDisplay } from './components/TokenUsageDisplay';
 import { SpotifyPreviewImage } from './components/SpotifyPreviewImage';
+import { useTypingAnimation } from './hooks/useTypingAnimation';
 
 export default function Home() {
   const router = useRouter();
@@ -27,10 +28,6 @@ export default function Home() {
   const [message, setMessage] = useState("");
   const [displayMessage, setDisplayMessage] = useState("");
   const [messageAnimating, setMessageAnimating] = useState(false);
-  const [currentPlaceholderIndex, setCurrentPlaceholderIndex] = useState(0);
-  const [typedText, setTypedText] = useState("");
-  const [isTyping, setIsTyping] = useState(true);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [shouldAutoSearch, setShouldAutoSearch] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const askButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -54,6 +51,9 @@ export default function Home() {
     "upbeat song with drums"
   ], []);
 
+  // Use the typing animation hook
+  const { animatedPlaceholder } = useTypingAnimation(placeholderTexts, search);
+
   useEffect(() => {
     const token = localStorage.getItem('spotify_access_token');
     const refreshToken = localStorage.getItem('spotify_refresh_token');
@@ -70,46 +70,7 @@ export default function Home() {
     setLoading(false);
   }, []);
 
-  // Typing animation effect
-  useEffect(() => {
-    if (search.trim()) {
-      setTypedText("");
-      return; // Don't animate when user is typing
-    }
 
-    const currentText = placeholderTexts[currentPlaceholderIndex];
-    let timeout: NodeJS.Timeout;
-
-    if (isTyping && !isDeleting) {
-      // Typing characters
-      if (typedText.length < currentText.length) {
-              timeout = setTimeout(() => {
-        setTypedText(currentText.slice(0, typedText.length + 1));
-      }, 25 + Math.random() * 50); // Variable typing speed (25-75ms) - twice as fast
-      } else {
-        // Finished typing, wait then start deleting
-        timeout = setTimeout(() => {
-          setIsDeleting(true);
-        }, 2000); // Pause for 2 seconds when done typing
-      }
-    } else if (isDeleting) {
-      // Deleting characters
-      if (typedText.length > 0) {
-              timeout = setTimeout(() => {
-        setTypedText(typedText.slice(0, -1));
-      }, 15 + Math.random() * 25); // Faster deleting (15-40ms) - twice as fast
-      } else {
-        // Finished deleting, move to next placeholder
-        setIsDeleting(false);
-        setCurrentPlaceholderIndex((prev) => (prev + 1) % placeholderTexts.length);
-        setTimeout(() => {
-          setIsTyping(true);
-        }, 300); // Short pause before starting next text
-      }
-    }
-
-    return () => clearTimeout(timeout);
-  }, [search, typedText, isTyping, isDeleting, currentPlaceholderIndex, placeholderTexts]);
 
   useEffect(() => {
     if (!showAuthDropdown) return;
@@ -692,7 +653,7 @@ export default function Home() {
           <div className="flex items-start gap-3 mb-3">
             <textarea
               className="flex-1 bg-transparent outline-none py-2 text-base md:text-lg text-[#502D07] placeholder-[#838D5A] font-roobert resize-none overflow-hidden min-h-[3rem] max-h-32"
-              placeholder={typedText + (isTyping && !isDeleting ? "|" : "")}
+              placeholder={animatedPlaceholder}
               value={search}
               onChange={e => setSearch(e.target.value)}
               rows={2}
