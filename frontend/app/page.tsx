@@ -280,9 +280,7 @@ export default function Home() {
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [showAuthDropdown, setShowAuthDropdown] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [animatedProgress, setAnimatedProgress] = useState(0);
-  const [total, setTotal] = useState(0);
   const [showProgress, setShowProgress] = useState(false);
   const animationRef = useRef<number | null>(null);
   const lastFrameTimeRef = useRef<number>(0);
@@ -304,8 +302,6 @@ export default function Home() {
   const [completedEvents, setCompletedEvents] = useState(0);
   const [lastFinishTime, setLastFinishTime] = useState<number | null>(null);
   const [avgDelta, setAvgDelta] = useState(1000); // Start with 1 second guess (in ms)
-  const [pseudoProgress, setPseudoProgress] = useState(0);
-  const [targetProgress, setTargetProgress] = useState(0);
   const currentAnimatedProgressRef = useRef(0); // Track current animated progress locally
   const [showLargeBatchAlert, setShowLargeBatchAlert] = useState(false);
 
@@ -497,7 +493,6 @@ export default function Home() {
   // Smooth progress animation using predictive smoothing
   useEffect(() => {
     if (!totalEvents || totalEvents === 0) {
-      setPseudoProgress(0);
       setAnimatedProgress(0);
       return;
     }
@@ -520,7 +515,6 @@ export default function Home() {
       
       // If we haven't started receiving updates yet, just show 0
       if (!lastFinishTime) {
-        setPseudoProgress(0);
         setAnimatedProgress(0);
         animationRef.current = requestAnimationFrame(animate);
         return;
@@ -550,9 +544,7 @@ export default function Home() {
       // Update ref immediately for next animation frame
       currentAnimatedProgressRef.current = smoothedProgress;
       
-      setPseudoProgress(newTargetProgress); // pseudoProgress should track the target, not the interpolation
       setAnimatedProgress(smoothedProgress); // animatedProgress gets the smooth interpolation
-      setTargetProgress(newTargetProgress);
       
       // Stop animation if all events are truly completed
       if (completedEvents < totalEvents) {
@@ -560,7 +552,6 @@ export default function Home() {
       } else {
         // All done - force to 100%
         currentAnimatedProgressRef.current = 1.0;
-        setPseudoProgress(1.0);
         setAnimatedProgress(1.0);
         animationRef.current = null;
       }
@@ -582,17 +573,13 @@ export default function Home() {
 
     setIsSearching(true);
     setShowProgress(false);
-    setProgress(0);
     setAnimatedProgress(0);
-    setTotal(0);
     
     // Initialize smooth progress tracking
     setTotalEvents(0);
     setCompletedEvents(0);
     setLastFinishTime(null);
     setAvgDelta(1000); // Reset to 1 second guess
-    setPseudoProgress(0);
-    setTargetProgress(0);
     currentAnimatedProgressRef.current = 0; // Reset ref
     setShowLargeBatchAlert(false); // Reset alert
     
@@ -717,10 +704,6 @@ export default function Home() {
                     const newCompleted = data.processed;
                     const newTotal = data.total;
                     
-                    // Update basic progress for backward compatibility
-                    setProgress(newCompleted);
-                    setTotal(newTotal);
-                    
                     // Initialize total events on first progress update - use functional update to get current state
                     setTotalEvents(prevTotalEvents => {
                       if (prevTotalEvents === 0 && newTotal > 0) {
@@ -761,15 +744,11 @@ export default function Home() {
                     setShowProgress(true);
                   } else if (data.type === 'start') {
                     // Explicit reset of all progress state for new search
-                    setProgress(0);
                     setAnimatedProgress(0);
-                    setTotal(0);
                     setTotalEvents(0);
                     setCompletedEvents(0);
                     setLastFinishTime(null);
                     setAvgDelta(1000);
-                    setPseudoProgress(0);
-                    setTargetProgress(0);
                     setShowProgress(false);
                     setSearchResults([]);
                     setTokenUsage(null);
@@ -1120,7 +1099,7 @@ export default function Home() {
             {showLargeBatchAlert && (
               <div className="mt-4 p-4 bg-[#FFF5D1] border-2 border-[#F6A23B] rounded-xl animate-fadeIn">
                 <p className="text-sm text-[#502D07] font-medium text-center leading-relaxed">
-                  <span className="text-base">🍃</span> You have a lot of songs Cannoli hasn't listened to yet. This may take a few minutes! Go watch some reels and come back soon pls.
+                  <span className="text-base">🍃</span> You have a lot of songs Cannoli hasn&apos;t listened to yet. This may take a few minutes! Go watch some reels and come back soon pls.
                 </p>
               </div>
             )}
