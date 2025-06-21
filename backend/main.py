@@ -48,7 +48,7 @@ openai_key = os.getenv('OPENAI_API_KEY')
 supabase_url = os.getenv('SUPABASE_URL')
 supabase_service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
-SET_MAX_SONGS_FORR_DEBUG: int | None = 50
+SET_MAX_SONGS_FORR_DEBUG: int | None = 1000
 
 app = FastAPI()                 # <- Vercel will pick this up
 app.add_middleware(
@@ -296,21 +296,23 @@ async def spotify_search(
             }
             
             if unprocessed_raw_songs:
-                perc5_unprocessed_songs_ct = max(len(unprocessed_raw_songs) // 20, 5)
+                perc5_unprocessed_songs_ct = max(len(unprocessed_raw_songs) // 5, 10)
+                last_yield_time = time.time()
+                
                 for song, token_usage in enrich_songs(unprocessed_raw_songs):
                     enriched_songs.append(song)
                     # Update token usage
                     total_enrichment_tokens = token_usage
                     
-                    if len(enriched_songs) % perc5_unprocessed_songs_ct == 0:
+                    current_time = time.time()
+                    if len(enriched_songs) % perc5_unprocessed_songs_ct == 0 and current_time - last_yield_time >= 2:
                         # with a 5% chance emit a progress update with the message
                         # "Just listened to song.title by song.artist!"
                         if random.random() < 0.05:
                             yield f"data: {json.dumps({'type': 'progress', 'processed': len(enriched_songs), 'total': total_progress_steps, 'message': f'Just listened to {song.name} by {', '.join(song.artists)}...'})}\n\n"
-                            await asyncio.sleep(0.1)
                         else:
                             yield f"data: {json.dumps({'type': 'progress', 'processed': len(enriched_songs), 'total': total_progress_steps, 'message': f'Cannoli has listened to {len(enriched_songs)} out of {len(unprocessed_raw_songs)} new songs...'})}\n\n"
-                            await asyncio.sleep(0.1)
+                        last_yield_time = current_time
                 
                 # Save newly enriched songs to database
                 save_enriched_songs_to_db(enriched_songs)

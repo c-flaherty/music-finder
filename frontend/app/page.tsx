@@ -470,8 +470,6 @@ export default function Home() {
     setSearchResults([]);
     setMessage("Fetching Cannoli...");
 
-    console.log('hi3');
-
     try {
       // Check if token is expired
       const expiresAt = localStorage.getItem('spotify_token_expires_at');
@@ -522,18 +520,13 @@ export default function Home() {
         }
       }
 
-      console.log('hi2');
-
       if (!token) {
         localStorage.removeItem('spotify_access_token');
         localStorage.removeItem('spotify_refresh_token');
         localStorage.removeItem('spotify_token_expires_at');
         router.push(`/api/auth/spotify${search.trim() ? `?q=${encodeURIComponent(search.trim())}` : ''}`);
-        console.log('hi5');
         return;
       }
-
-      console.log('hi4');
 
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8001';
       const fetchUrl = `${backendUrl}/api/spotify_search?query=${encodeURIComponent(search)}`;
@@ -555,8 +548,6 @@ export default function Home() {
             'Refresh-Token': refreshToken || '',
           },
         });
-
-        console.log('hi - fetch completed with status:', response.status);
 
         if (!response.ok) {
           if (response.status === 401) {
@@ -777,11 +768,11 @@ export default function Home() {
         <form onSubmit={handleSearch} data-search-form className="w-full max-w-xl flex flex-col bg-white border border-[#DDCDA8] rounded-2xl shadow-md px-4 md:px-5 py-3 focus-within:ring-2 focus-within:ring-[#F6A23B] transition-all mx-4 relative">
           <div className="flex items-start gap-3 mb-3">
             <textarea
-              className="flex-1 bg-transparent outline-none py-2 text-base md:text-lg text-[#502D07] placeholder-[#838D5A] font-roobert resize-none overflow-hidden min-h-[1.5rem] max-h-32"
+              className="flex-1 bg-transparent outline-none py-2 text-base md:text-lg text-[#502D07] placeholder-[#838D5A] font-roobert resize-none overflow-hidden min-h-[3rem] max-h-32"
               placeholder={typedText + (isTyping && !isDeleting ? "|" : "")}
               value={search}
               onChange={e => setSearch(e.target.value)}
-              rows={1}
+              rows={2}
               style={{
                 lineHeight: '1.5rem',
                 height: 'auto'
