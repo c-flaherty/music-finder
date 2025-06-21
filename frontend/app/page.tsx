@@ -10,12 +10,12 @@ import { LyricsDisplay } from './components/LyricsDisplay';
 import { TokenUsageDisplay } from './components/TokenUsageDisplay';
 import { SpotifyPreviewImage } from './components/SpotifyPreviewImage';
 import { useTypingAnimation } from './hooks/useTypingAnimation';
+import { useAuth } from './hooks/useAuth';
 
 export default function Home() {
   const router = useRouter();
+  const { isAuthenticated, loading, shouldAutoSearch, setShouldAutoSearch, getValidToken, handleUnauthorized } = useAuth();
   const [search, setSearch] = useState("");
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -28,7 +28,6 @@ export default function Home() {
   const [message, setMessage] = useState("");
   const [displayMessage, setDisplayMessage] = useState("");
   const [messageAnimating, setMessageAnimating] = useState(false);
-  const [shouldAutoSearch, setShouldAutoSearch] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const askButtonRef = useRef<HTMLButtonElement | null>(null);
   const readerRef = useRef<ReadableStreamDefaultReader | null>(null);
@@ -54,21 +53,7 @@ export default function Home() {
   // Use the typing animation hook
   const { animatedPlaceholder } = useTypingAnimation(placeholderTexts, search);
 
-  useEffect(() => {
-    const token = localStorage.getItem('spotify_access_token');
-    const refreshToken = localStorage.getItem('spotify_refresh_token');
-    const expiresAt = localStorage.getItem('spotify_token_expires_at');
 
-    console.log('Auth state:', {
-      hasAccessToken: !!token,
-      hasRefreshToken: !!refreshToken,
-      expiresAt: expiresAt ? new Date(parseInt(expiresAt)).toISOString() : 'not set',
-      isExpired: expiresAt ? Date.now() > parseInt(expiresAt) : true
-    });
-
-    setIsAuthenticated(!!token);
-    setLoading(false);
-  }, []);
 
 
 
@@ -115,39 +100,8 @@ export default function Home() {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const q = params.get('q');
-      const startSearch = params.get('start_search') === 'true';
       
       if (q) setSearch(q);
-
-      // Handle tokens from URL after Spotify login
-      const accessToken = params.get('access_token');
-      const refreshToken = params.get('refresh_token');
-      const expiresIn = params.get('expires_in');
-
-      if (accessToken) {
-        localStorage.setItem('spotify_access_token', accessToken);
-        if (refreshToken) {
-          localStorage.setItem('spotify_refresh_token', refreshToken);
-        }
-        if (expiresIn) {
-          const expiresAt = Date.now() + (parseInt(expiresIn) * 1000);
-          localStorage.setItem('spotify_token_expires_at', expiresAt.toString());
-        }
-        setIsAuthenticated(true);
-
-        // Clean up URL to remove tokens and start_search
-        const newUrl = new URL(window.location.href);
-        newUrl.searchParams.delete('access_token');
-        newUrl.searchParams.delete('refresh_token');
-        newUrl.searchParams.delete('expires_in');
-        newUrl.searchParams.delete('start_search');
-        window.history.replaceState({}, '', newUrl.toString());
-
-        // If start_search is true and we have a search query, trigger search automatically
-        if (startSearch && q && q.trim()) {
-          setShouldAutoSearch(true);
-        }
-      }
     }
   }, []);
 
@@ -291,67 +245,18 @@ export default function Home() {
     setMessage("Fetching Cannoli...");
 
     try {
-      // Check if token is expired
-      const expiresAt = localStorage.getItem('spotify_token_expires_at');
-      const refreshToken = localStorage.getItem('spotify_refresh_token');
-      let token = localStorage.getItem('spotify_access_token');
-
-      if (expiresAt && Date.now() > parseInt(expiresAt) && !refreshToken) {
-        router.push('/api/auth/spotify');
-        return;
-      }
-
-      if (expiresAt && refreshToken && Date.now() > parseInt(expiresAt)) {
-        // Token is expired, try to refresh
-        try {
-          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8001';
-          const response = await fetch(`${backendUrl}/api/spotify_refresh`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ refresh_token: refreshToken }),
-          });
-
-          if (!response.ok) {
-            // Clear local auth and redirect to login
-            localStorage.removeItem('spotify_access_token');
-            localStorage.removeItem('spotify_refresh_token');
-            localStorage.removeItem('spotify_token_expires_at');
-            router.push(`/api/auth/spotify${search.trim() ? `?q=${encodeURIComponent(search.trim())}` : ''}`);
-            return;
-          }
-
-          const data = await response.json();
-          token = data.access_token;
-          if (token) {
-            localStorage.setItem('spotify_access_token', token);
-            if (data.refresh_token) {
-              localStorage.setItem('spotify_refresh_token', data.refresh_token);
-            }
-            localStorage.setItem('spotify_token_expires_at', (Date.now() + (data.expires_in * 1000)).toString());
-          } else {
-            throw new Error('No access token received from refresh');
-          }
-        } catch (refreshError) {
-          console.error('Error refreshing token:', refreshError);
-          router.push('/?error=unauthorized');
-          return;
-        }
-      }
-
+      // Get valid token (with refresh if needed)
+      const token = await getValidToken(search.trim());
+      
       if (!token) {
-        localStorage.removeItem('spotify_access_token');
-        localStorage.removeItem('spotify_refresh_token');
-        localStorage.removeItem('spotify_token_expires_at');
-        router.push(`/api/auth/spotify${search.trim() ? `?q=${encodeURIComponent(search.trim())}` : ''}`);
-        return;
+        return; // getValidToken handles redirects
       }
 
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8001';
       const fetchUrl = `${backendUrl}/api/spotify_search?query=${encodeURIComponent(search)}`;
 
       try {
+        const refreshToken = localStorage.getItem('spotify_refresh_token');
         const response = await fetch(fetchUrl, {
           method: 'GET',
           headers: {
@@ -363,10 +268,7 @@ export default function Home() {
         if (!response.ok) {
           if (response.status === 401) {
             // Token invalid
-            localStorage.removeItem('spotify_access_token');
-            localStorage.removeItem('spotify_refresh_token');
-            localStorage.removeItem('spotify_token_expires_at');
-            router.push(`/api/auth/spotify${search.trim() ? `?q=${encodeURIComponent(search.trim())}` : ''}`);
+            handleUnauthorized(search.trim());
             return;
           }
           throw new Error('Search failed');
@@ -673,9 +575,20 @@ export default function Home() {
                     // Shift+Enter: allow newline (default behavior)
                     return;
                   } else {
-                    // Enter alone: trigger search
                     e.preventDefault();
-                    if (search.trim() && !isSearching) {
+                    
+                    if (!isAuthenticated && search.trim()) {
+                      // If not authenticated and has search text
+                      if (!showAuthDropdown) {
+                        // First Enter: show auth dropdown
+                        setShowAuthDropdown(true);
+                      } else {
+                        // Second Enter: navigate to Spotify auth
+                        const authUrl = `/api/auth/spotify${search.trim() ? `?q=${encodeURIComponent(search.trim())}` : ''}`;
+                        window.location.href = authUrl;
+                      }
+                    } else if (isAuthenticated && search.trim() && !isSearching) {
+                      // If authenticated: trigger search
                       const form = e.currentTarget.closest('form');
                       if (form) {
                         form.requestSubmit();
@@ -928,31 +841,6 @@ export default function Home() {
           </div>
         </section>
       )}
-
-      {/* Auth Button */}
-      {/* <div className="w-full flex justify-center mb-6 md:mb-8 px-4">
-        {isAuthenticated ? (
-          <button
-            onClick={() => router.push('/library')}
-            className="flex items-center gap-3 px-6 md:px-7 py-2.5 md:py-3 bg-[#502D07] text-white rounded-xl text-sm md:text-base font-semibold shadow hover:scale-105 active:scale-95 transition-transform w-full md:w-auto justify-center font-roobert"
-          >
-            <Image src="/logos/cannoli.png" alt="Cannoli logo" width={20} height={20} className="bg-white rounded-full md:w-[22px] md:h-[22px]" />
-            <span>Go to Library</span>
-          </button>
-        ) : (
-          <a 
-            href="/api/auth/spotify"
-            className="flex items-center gap-3 px-6 md:px-7 py-2.5 md:py-3 bg-[#01D75E] text-white rounded-xl text-sm md:text-base font-semibold shadow hover:scale-105 active:scale-95 transition-transform w-full md:w-auto justify-center font-roobert"
-          >
-            <Image src="/spotify/logo.png" alt="Spotify logo" width={20} height={20} className="bg-white rounded-full md:w-[22px] md:h-[22px]" />
-            <span>Sign in with Spotify</span>
-          </a>
-        )}
-      </div> */}
-
-      {/* Footer */}
-      <footer className="w-full flex flex-col items-center gap-3 md:gap-4 pb-2 mt-auto px-4">
-      </footer>
     </div>
   );
 }
