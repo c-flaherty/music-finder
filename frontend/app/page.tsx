@@ -880,6 +880,7 @@ export default function Home() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               rows={2}
+              disabled={isSearching}
               style={{
                 lineHeight: '1.5rem',
                 height: 'auto'
