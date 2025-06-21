@@ -122,6 +122,11 @@ def get_lyrics(song_name: str, artist_names: list[str]) -> str:
 
 def get_song_metadata(song_name: str, artist_names: list[str]) -> tuple[str, dict]:
     """Ask LLM with search tool to research the song."""
+
+    # TODO: REMOVE
+    time.sleep(random.uniform(0.5, 1))
+    return "", {}
+
     llm_client = get_client("openai-direct", model_name="gpt-4o-mini-search-preview", enable_web_search=True)
     prompt = get_song_metadata_query(song_name, artist_names)
     response_tuple = llm_client.generate(
@@ -342,7 +347,6 @@ def enrich_songs(songs: list[RawSong]):
         
         # Collect results as they complete and yield them
         for future in as_completed(future_to_song):
-            time.sleep(random.uniform(0.5, 1))
             try:
                 enriched_song, token_usage = future.result()
                 if enriched_song.lyrics:

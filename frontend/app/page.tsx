@@ -284,11 +284,8 @@ export default function Home() {
   const [animatedProgress, setAnimatedProgress] = useState(0);
   const [total, setTotal] = useState(0);
   const [showProgress, setShowProgress] = useState(false);
-  const [secondsPerSong, setSecondsPerSong] = useState<number | null>(null);
-  const [progressStartTime, setProgressStartTime] = useState<number | null>(null);
   const animationRef = useRef<number | null>(null);
-  const animationStartTime = useRef<number | null>(null);
-  const animationStartProgress = useRef<number>(0);
+  const lastFrameTimeRef = useRef<number>(0);
   const [showTokenUsage, setShowTokenUsage] = useState(false);
   const [message, setMessage] = useState("");
   const [displayMessage, setDisplayMessage] = useState("");
@@ -301,6 +298,13 @@ export default function Home() {
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const askButtonRef = useRef<HTMLButtonElement | null>(null);
   const readerRef = useRef<ReadableStreamDefaultReader | null>(null);
+
+  // Progress tracking variables for smooth animation
+  const [totalEvents, setTotalEvents] = useState(0);
+  const [completedEvents, setCompletedEvents] = useState(0);
+  const [lastFinishTime, setLastFinishTime] = useState<number | null>(null);
+  const [avgDelta, setAvgDelta] = useState(1000); // Start with 1 second guess (in ms)
+  const [pseudoProgress, setPseudoProgress] = useState(0);
 
   const placeholderTexts = useMemo(() => [
     "that song about a roof in New York?",
@@ -485,45 +489,67 @@ export default function Home() {
       // First time or same message
       setDisplayMessage(message);
     }
-  }, [message]); // Only depend on message, not displayMessage
+  }, [message, displayMessage]); // Include displayMessage to fix dependency warning
 
-    // Smooth progress animation using sec/song from backend
+  // Smooth progress animation using predictive smoothing
   useEffect(() => {
-    if (!secondsPerSong || !total || !progressStartTime) return;
+    if (!totalEvents || totalEvents === 0) {
+      setPseudoProgress(0);
+      setAnimatedProgress(0);
+      return;
+    }
 
     // Clear any existing animation
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
     }
 
-    // Initialize animation starting point
-    if (!animationStartTime.current) {
-      animationStartTime.current = Date.now();
-      animationStartProgress.current = animatedProgress;
-    }
-
-    const animate = () => {
-      const timeElapsed = (Date.now() - progressStartTime) / 1000; // Convert to seconds
-      const animationElapsed = (Date.now() - animationStartTime.current!) / 1000;
+    const animate = (currentTime: number) => {
+      // Limit to ~30fps for smoother looking animation
+      if (currentTime - lastFrameTimeRef.current < 33) {
+        animationRef.current = requestAnimationFrame(animate);
+        return;
+      }
+      lastFrameTimeRef.current = currentTime;
       
-      const boostedSecondsPerSong = secondsPerSong / 1.25; // 25% faster
-      const predictedProgress = Math.min(timeElapsed / boostedSecondsPerSong, total);
-      const targetProgressRatio = predictedProgress / total;
+      const now = Date.now();
       
-      // Smooth transition from starting progress to predicted progress
-      const transitionDuration = 1.0; // 1 second smooth transition
-      const transitionProgress = Math.min(animationElapsed / transitionDuration, 1);
-      const currentProgressRatio = animationStartProgress.current + 
-        (targetProgressRatio - animationStartProgress.current) * transitionProgress;
+      // If we haven't started receiving updates yet, just show 0
+      if (!lastFinishTime) {
+        setPseudoProgress(0);
+        setAnimatedProgress(0);
+        animationRef.current = requestAnimationFrame(animate);
+        return;
+      }
       
-      // Halt at 90% until results arrive
-      const cappedProgressRatio = Math.min(currentProgressRatio, 0.9);
-      setAnimatedProgress(cappedProgressRatio);
+      const elapsed = now - lastFinishTime;
+      const extra = elapsed / avgDelta; // How many "typical" items based on recent average
+      const pseudoDone = Math.min(completedEvents + extra, totalEvents); // Never overshoot
+      const progressRatio = pseudoDone / totalEvents;
       
-      // Continue animation if we haven't reached 90%
-      if (cappedProgressRatio < 0.9) {
+      // Debug logging (remove in production)
+      if (Math.random() < 0.1) { // Only log 10% of frames to avoid spam
+        console.log('Animation frame:', {
+          elapsed,
+          avgDelta,
+          extra,
+          completedEvents,
+          pseudoDone,
+          totalEvents,
+          progressRatio: Math.round(progressRatio * 100) + '%'
+        });
+      }
+      
+      setPseudoProgress(progressRatio);
+      setAnimatedProgress(progressRatio);
+      
+      // Stop animation if all events are truly completed
+      if (completedEvents < totalEvents) {
         animationRef.current = requestAnimationFrame(animate);
       } else {
+        // All done - force to 100%
+        setPseudoProgress(1.0);
+        setAnimatedProgress(1.0);
         animationRef.current = null;
       }
     };
@@ -536,7 +562,7 @@ export default function Home() {
         animationRef.current = null;
       }
     };
-  }, [secondsPerSong, total, progressStartTime, progress]);
+  }, [totalEvents, completedEvents, lastFinishTime, avgDelta]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -547,15 +573,18 @@ export default function Home() {
     setProgress(0);
     setAnimatedProgress(0);
     setTotal(0);
-    setProgressStartTime(Date.now());
-    setSecondsPerSong(null);
+    
+    // Initialize smooth progress tracking
+    setTotalEvents(0);
+    setCompletedEvents(0);
+    setLastFinishTime(null);
+    setAvgDelta(1000); // Reset to 1 second guess
+    setPseudoProgress(0);
+    
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
     }
-    // Reset animation refs
-    animationStartTime.current = null;
-    animationStartProgress.current = 0;
     setSearchResults([]);
     setMessage("Fetching Cannoli...");
 
@@ -680,11 +709,36 @@ export default function Home() {
                   const data = JSON.parse(message.slice(6)); // Remove 'data: ' prefix
 
                   if (data.type === 'progress') {
-                    setProgress(data.processed);
-                    setTotal(data.total * 1.1); // add 10% buffer so it never looks done
-                    setMessage(data.message);
-                    if (data['sec/song']) {
-                      setSecondsPerSong(data['sec/song']);
+                    const now = Date.now();
+                    const newCompleted = data.processed;
+                    const newTotal = data.total;
+                    
+                    // Update basic progress for backward compatibility
+                    setProgress(newCompleted);
+                    setTotal(newTotal);
+                    
+                    // Initialize total events on first progress update
+                    if (totalEvents === 0 && newTotal > 0) {
+                      setTotalEvents(newTotal * 1.1); // Add 10% buffer so progress never exceeds 90%
+                      setLastFinishTime(now);
+                      // Initial guess: assume 1 item per second
+                      const initialAvgDelta = Math.max(1000, (newTotal * 1000) / 60); // At least 1s, max 1 min per item
+                      setAvgDelta(initialAvgDelta);
+                    }
+                    
+                    // Update exponentially-smoothed average when events actually complete
+                    if (newCompleted > completedEvents) {
+                      if (lastFinishTime && completedEvents > 0) {
+                        const delta = now - lastFinishTime;
+                        const alpha = 0.2; // Tuning parameter for smoothing
+                        setAvgDelta(prevAvgDelta => alpha * delta + (1 - alpha) * prevAvgDelta);
+                      }
+                      setLastFinishTime(now);
+                      setCompletedEvents(newCompleted);
+                    }
+                    
+                    if (data.message) {
+                      setMessage(data.message);
                     }
                     setShowProgress(true);
                   } else if (data.type === 'results') {
@@ -692,6 +746,9 @@ export default function Home() {
                     console.log('Token usage data:', data.token_usage);
                     setTokenUsage(data.token_usage || null);
                     setSearchResults(data.results || []);
+                    
+                    // Mark all events as completed to trigger final animation
+                    setCompletedEvents(totalEvents || data.results?.length || 0);
                     setAnimatedProgress(1.0); // Complete the progress bar
                     setShowProgress(false);
                   } else if (data.type === 'error') {
@@ -1014,6 +1071,22 @@ export default function Home() {
             <h3 className={`text-lg font-['Proxima_Nova'] font-extrabold text-[#502D07] mb-2 transition-opacity duration-200 ${messageAnimating ? 'animate-messageOut' : 'opacity-100'}`}>
               {displayMessage}
             </h3>
+            
+            {/* Progress details for debugging and user info */}
+            {(progress > 0 || completedEvents > 0) && (
+              <div className="text-sm text-[#838D5A] mt-2">
+                {completedEvents > 0 && totalEvents > 0 && (
+                  <div>
+                    {completedEvents} of {total} songs processed
+                    {pseudoProgress > 0 && pseudoProgress < 1 && (
+                      <span className="ml-2 text-xs">
+                        (~{Math.round(pseudoProgress * 100)}% complete)
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -1163,7 +1236,6 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="w-full flex flex-col items-center gap-3 md:gap-4 pb-2 mt-auto px-4">
-        <span className="text-[#838D5A] text-xs font-roobert">Made with ❤️</span>
       </footer>
     </div>
   );

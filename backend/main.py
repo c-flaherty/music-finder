@@ -39,7 +39,8 @@ from utils import (
     save_enriched_songs_to_db,
     enrich_songs,
     get_playlist_names,
-    refresh_access_token
+    refresh_access_token,
+    SET_MAX_SONGS_FORR_DEBUG,
 )
 
 # Environment variables
@@ -47,8 +48,6 @@ anthropic_key = os.getenv('ANTHROPIC_API_KEY')
 openai_key = os.getenv('OPENAI_API_KEY')
 supabase_url = os.getenv('SUPABASE_URL')
 supabase_service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
-
-SET_MAX_SONGS_FORR_DEBUG: int | None = 1000
 
 app = FastAPI()                 # <- Vercel will pick this up
 app.add_middleware(
@@ -310,22 +309,20 @@ async def spotify_search(
             if unprocessed_raw_songs:
                 last_yield_time = time.time()
                 durations = []
-                avg_song_time = 0.
                 for song, token_usage in enrich_songs(unprocessed_raw_songs):                
                     enriched_songs.append(song)
                     # Update token usage
                     total_enrichment_tokens = token_usage
 
-                    if len(durations) == 5:
-                        avg_song_time = (sum(durations) / len(durations)) / 3 # 3x speed to make the visual animation look better
-                    
                     current_time = time.time()
-                    durations.append(current_time - last_yield_time)
-                    if len(durations) > 5 and current_time - last_yield_time >= 1:
+                    if current_time - last_yield_time >= 1:
                         progress_update_copy = get_progress_update_copy(len(enriched_songs), total_progress_steps, song)
-                        yield f"data: {json.dumps({'type': 'progress', 'processed': len(enriched_songs), 'total': total_progress_steps, 'message': progress_update_copy, 'sec/song': avg_song_time})}\n\n"
+                        yield f"data: {json.dumps({'type': 'progress', 'processed': len(enriched_songs), 'total': total_progress_steps, 'message': progress_update_copy})}\n\n"
                         await asyncio.sleep(0.1)
                         last_yield_time = current_time
+                    else:
+                        yield f"data: {json.dumps({'type': 'progress', 'processed': len(enriched_songs), 'total': total_progress_steps})}\n\n"
+                        await asyncio.sleep(0.1)
                 
                 # Save newly enriched songs to database
                 save_enriched_songs_to_db(enriched_songs)
@@ -343,8 +340,15 @@ async def spotify_search(
             
             # Search through the enriched songs using LLM
             llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
-            relevant_songs, search_token_usage = search_library(llm_client, all_enriched_songs, query, n=3, chunk_size=100, verbose=True)
-            
+            #relevant_songs, search_token_usage = search_library(llm_client, all_enriched_songs, query, n=3, chunk_size=100, verbose=True)
+            # TODO: REMOVE
+            relevant_songs = all_enriched_songs[:3]
+            search_token_usage = {
+                'total_input_tokens': 0,
+                'total_output_tokens': 0,
+                'total_requests': 0
+            }
+
             print(f"[spotify_search] Done searching")
             
             yield f"data: {json.dumps({'type': 'status', 'message': 'Processing results...'})}\n\n"
