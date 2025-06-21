@@ -9,6 +9,7 @@ import { roobert } from './fonts';
 import { LyricsDisplay } from './components/LyricsDisplay';
 import { TokenUsageDisplay } from './components/TokenUsageDisplay';
 import { SpotifyPreviewImage } from './components/SpotifyPreviewImage';
+import { Header } from './components/Header';
 import { useTypingAnimation } from './hooks/useTypingAnimation';
 import { useAuth } from './hooks/useAuth';
 
@@ -539,17 +540,10 @@ export default function Home() {
         .animate-stagger-5 { animation-delay: 0.5s; }
       `}</style>
       {/* Header & Hero */}
-      <header className="w-full max-w-2xl mx-auto flex flex-col items-center mb-8 md:mb-12">
-        <h1 className="font-roobert text-4xl md:text-5xl lg:text-6xl font-[800] text-[#F6A23B] text-center mb-3 md:mb-4 tracking-tight leading-tight">
-          Remember that song
-          <span className="flex items-center justify-center w-full mt-1 gap-2" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            with <span className="text-[#502D07] ml-2">Cannoli</span>
-            <Image src="/logos/cannoli.png" alt="Cannoli logo" width={64} height={64} className="drop-shadow-sm ml-2 align-middle" />
-          </span>
-        </h1>
-        {/* <p className="text-base md:text-lg lg:text-xl text-[#502D07] text-center max-w-xl font-normal mb-6 md:mb-8 px-4">
-          What&apos;s that sound? What&apos;s that song about?
-        </p> */}
+      <Header />
+      
+      {/* Search Section */}
+      <section className="w-full max-w-2xl mx-auto mb-8 md:mb-12 px-4">
         {/* Modern Search Bar */}
         <form onSubmit={handleSearch} data-search-form className="w-full max-w-xl flex flex-col bg-white border border-[#DDCDA8] rounded-2xl shadow-md px-4 md:px-5 py-3 focus-within:ring-2 focus-within:ring-[#F6A23B] transition-all mx-4 relative">
           <div className="flex items-start gap-3 mb-3">
@@ -647,7 +641,7 @@ export default function Home() {
             </div>
           )}
         </form>
-      </header>
+      </section>
 
       {/* Progress Bar */}
       {isSearching && (
