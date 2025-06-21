@@ -306,6 +306,7 @@ export default function Home() {
   const [avgDelta, setAvgDelta] = useState(1000); // Start with 1 second guess (in ms)
   const [pseudoProgress, setPseudoProgress] = useState(0);
   const [targetProgress, setTargetProgress] = useState(0);
+  const currentAnimatedProgressRef = useRef(0); // Track current animated progress locally
 
   const placeholderTexts = useMemo(() => [
     "that song about a roof in New York?",
@@ -527,16 +528,29 @@ export default function Home() {
       const elapsed = now - lastFinishTime;
       const extra = elapsed / avgDelta; // How many "typical" items based on recent average
       const pseudoDone = Math.min(completedEvents + extra, totalEvents); // Never overshoot
-      const newTargetProgress = pseudoDone / totalEvents;
+      let newTargetProgress = pseudoDone / totalEvents;
+      
+      // "Catch up" animation when close to completion
+      const completionRatio = completedEvents / totalEvents;
+      const isCatchingUp = completionRatio >= 0.8;
+      
+      if (isCatchingUp) {
+        // When 80%+ complete, jump target to 90% for catch-up animation
+        newTargetProgress = 0.9;
+      }
       
       // Smooth interpolation towards target progress (easing)
-      const currentProgress = pseudoProgress;
+      const currentProgress = currentAnimatedProgressRef.current; // Use ref for immediate updates
       const progressDiff = newTargetProgress - currentProgress;
-      const smoothingFactor = 0.1; // Adjust for smoother/faster animation (0.05-0.2 range)
+      // Use faster animation speed during catch-up
+      const smoothingFactor = 0.1;
       const smoothedProgress = currentProgress + (progressDiff * smoothingFactor);
       
-      setPseudoProgress(smoothedProgress);
-      setAnimatedProgress(smoothedProgress);
+      // Update ref immediately for next animation frame
+      currentAnimatedProgressRef.current = smoothedProgress;
+      
+      setPseudoProgress(newTargetProgress); // pseudoProgress should track the target, not the interpolation
+      setAnimatedProgress(smoothedProgress); // animatedProgress gets the smooth interpolation
       setTargetProgress(newTargetProgress);
       
       // Stop animation if all events are truly completed
@@ -544,6 +558,7 @@ export default function Home() {
         animationRef.current = requestAnimationFrame(animate);
       } else {
         // All done - force to 100%
+        currentAnimatedProgressRef.current = 1.0;
         setPseudoProgress(1.0);
         setAnimatedProgress(1.0);
         animationRef.current = null;
@@ -577,6 +592,7 @@ export default function Home() {
     setAvgDelta(1000); // Reset to 1 second guess
     setPseudoProgress(0);
     setTargetProgress(0);
+    currentAnimatedProgressRef.current = 0; // Reset ref
     
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
@@ -646,15 +662,6 @@ export default function Home() {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8001';
       const fetchUrl = `${backendUrl}/api/spotify_search?query=${encodeURIComponent(search)}`;
 
-      console.log('About to fetch:', {
-        url: fetchUrl,
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Refresh-Token': refreshToken || '',
-        }
-      });
-
       try {
         const response = await fetch(fetchUrl, {
           method: 'GET',
@@ -685,8 +692,6 @@ export default function Home() {
         readerRef.current = reader;
         const decoder = new TextDecoder();
         let buffer = '';
-
-        console.log('Streaming response...');
 
         try {
           while (true) {
@@ -721,7 +726,7 @@ export default function Home() {
                         // Initial guess: assume 1 item per second
                         const initialAvgDelta = Math.max(1000, (newTotal * 1000) / 60); // At least 1s, max 1 min per item
                         setAvgDelta(initialAvgDelta);
-                        return newTotal * 1.1; // Add 10% buffer so progress never exceeds 90%
+                        return newTotal; // Add 10% buffer so progress never exceeds 90%
                       }
                       return prevTotalEvents;
                     });
@@ -748,7 +753,6 @@ export default function Home() {
                     setShowProgress(true);
                   } else if (data.type === 'start') {
                     // Explicit reset of all progress state for new search
-                    console.log('Received start event - resetting progress state');
                     setProgress(0);
                     setAnimatedProgress(0);
                     setTotal(0);
@@ -766,8 +770,6 @@ export default function Home() {
                       setMessage(data.message);
                     }
                   } else if (data.type === 'results') {
-                    console.log('Search response data:', data);
-                    console.log('Token usage data:', data.token_usage);
                     setTokenUsage(data.token_usage || null);
                     
                     // Deduplicate results by ID to avoid React key conflicts
@@ -775,8 +777,7 @@ export default function Home() {
                     const uniqueResults = results.filter((song: SearchResult, index: number, self: SearchResult[]) => 
                       index === self.findIndex(s => s.id === song.id)
                     );
-                    
-                    console.log(`Deduplication: ${results.length} -> ${uniqueResults.length} songs`);
+
                     setSearchResults(uniqueResults);
                     
                     // Mark all events as completed to trigger final animation
