@@ -305,6 +305,7 @@ export default function Home() {
   const [lastFinishTime, setLastFinishTime] = useState<number | null>(null);
   const [avgDelta, setAvgDelta] = useState(1000); // Start with 1 second guess (in ms)
   const [pseudoProgress, setPseudoProgress] = useState(0);
+  const [targetProgress, setTargetProgress] = useState(0);
 
   const placeholderTexts = useMemo(() => [
     "that song about a roof in New York?",
@@ -505,8 +506,8 @@ export default function Home() {
     }
 
     const animate = (currentTime: number) => {
-      // Limit to ~30fps for smoother looking animation
-      if (currentTime - lastFrameTimeRef.current < 33) {
+      // Limit to ~60fps for smoother animation (16ms = ~60fps)
+      if (currentTime - lastFrameTimeRef.current < 16) {
         animationRef.current = requestAnimationFrame(animate);
         return;
       }
@@ -525,23 +526,17 @@ export default function Home() {
       const elapsed = now - lastFinishTime;
       const extra = elapsed / avgDelta; // How many "typical" items based on recent average
       const pseudoDone = Math.min(completedEvents + extra, totalEvents); // Never overshoot
-      const progressRatio = pseudoDone / totalEvents;
+      const newTargetProgress = pseudoDone / totalEvents;
       
-      // Debug logging (remove in production)
-      if (Math.random() < 0.1) { // Only log 10% of frames to avoid spam
-        console.log('Animation frame:', {
-          elapsed,
-          avgDelta,
-          extra,
-          completedEvents,
-          pseudoDone,
-          totalEvents,
-          progressRatio: Math.round(progressRatio * 100) + '%'
-        });
-      }
+      // Smooth interpolation towards target progress (easing)
+      const currentProgress = pseudoProgress;
+      const progressDiff = newTargetProgress - currentProgress;
+      const smoothingFactor = 0.1; // Adjust for smoother/faster animation (0.05-0.2 range)
+      const smoothedProgress = currentProgress + (progressDiff * smoothingFactor);
       
-      setPseudoProgress(progressRatio);
-      setAnimatedProgress(progressRatio);
+      setPseudoProgress(smoothedProgress);
+      setAnimatedProgress(smoothedProgress);
+      setTargetProgress(newTargetProgress);
       
       // Stop animation if all events are truly completed
       if (completedEvents < totalEvents) {
@@ -580,6 +575,7 @@ export default function Home() {
     setLastFinishTime(null);
     setAvgDelta(1000); // Reset to 1 second guess
     setPseudoProgress(0);
+    setTargetProgress(0);
     
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
@@ -741,11 +737,38 @@ export default function Home() {
                       setMessage(data.message);
                     }
                     setShowProgress(true);
+                  } else if (data.type === 'start') {
+                    // Explicit reset of all progress state for new search
+                    console.log('Received start event - resetting progress state');
+                    setProgress(0);
+                    setAnimatedProgress(0);
+                    setTotal(0);
+                    setTotalEvents(0);
+                    setCompletedEvents(0);
+                    setLastFinishTime(null);
+                    setAvgDelta(1000);
+                    setPseudoProgress(0);
+                    setTargetProgress(0);
+                    setShowProgress(false);
+                    setSearchResults([]);
+                    setTokenUsage(null);
+                    
+                    if (data.message) {
+                      setMessage(data.message);
+                    }
                   } else if (data.type === 'results') {
                     console.log('Search response data:', data);
                     console.log('Token usage data:', data.token_usage);
                     setTokenUsage(data.token_usage || null);
-                    setSearchResults(data.results || []);
+                    
+                    // Deduplicate results by ID to avoid React key conflicts
+                    const results = data.results || [];
+                    const uniqueResults = results.filter((song: SearchResult, index: number, self: SearchResult[]) => 
+                      index === self.findIndex(s => s.id === song.id)
+                    );
+                    
+                    console.log(`Deduplication: ${results.length} -> ${uniqueResults.length} songs`);
+                    setSearchResults(uniqueResults);
                     
                     // Mark all events as completed to trigger final animation
                     setCompletedEvents(totalEvents || data.results?.length || 0);
@@ -1045,6 +1068,9 @@ export default function Home() {
                 strokeLinecap="round"
                 strokeDasharray={`${2 * Math.PI * 70}`}
                 strokeDashoffset={`${2 * Math.PI * 70 * (1 - animatedProgress)}`}
+                style={{
+                  transition: 'stroke-dashoffset 0.1s ease-out'
+                }}
               />
               <defs>
                 <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -1071,22 +1097,6 @@ export default function Home() {
             <h3 className={`text-lg font-['Proxima_Nova'] font-extrabold text-[#502D07] mb-2 transition-opacity duration-200 ${messageAnimating ? 'animate-messageOut' : 'opacity-100'}`}>
               {displayMessage}
             </h3>
-            
-            {/* Progress details for debugging and user info */}
-            {(progress > 0 || completedEvents > 0) && (
-              <div className="text-sm text-[#838D5A] mt-2">
-                {completedEvents > 0 && totalEvents > 0 && (
-                  <div>
-                    {completedEvents} of {total} songs processed
-                    {pseudoProgress > 0 && pseudoProgress < 1 && (
-                      <span className="ml-2 text-xs">
-                        (~{Math.round(pseudoProgress * 100)}% complete)
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </section>
       )}

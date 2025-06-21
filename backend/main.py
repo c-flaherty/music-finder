@@ -41,6 +41,8 @@ from utils import (
     get_playlist_names,
     refresh_access_token,
     SET_MAX_SONGS_FORR_DEBUG,
+    SKIP_EXPENSIVE_STEPS,
+    SKIP_SUPABASE_CACHE
 )
 
 # Environment variables
@@ -268,6 +270,10 @@ async def spotify_search(
 
     async def event_stream():
         try:
+            # Emit explicit start event to reset frontend progress
+            yield f"data: {json.dumps({'type': 'start', 'message': 'Starting search...'})}\n\n"
+            await asyncio.sleep(0.1)
+            
             # Emit status update
             yield f"data: {json.dumps({'type': 'status', 'message': 'Fetching playlists...'})}\n\n"
             await asyncio.sleep(0.1)
@@ -289,10 +295,17 @@ async def spotify_search(
             await asyncio.sleep(0.1)
             
             # Check database for already processed songs
-            already_processed_enriched_songs, unprocessed_raw_songs = fetch_already_processed_enriched_songs(raw_songs)
+            if not SKIP_SUPABASE_CACHE:
+                already_processed_enriched_songs, unprocessed_raw_songs = fetch_already_processed_enriched_songs(raw_songs)
+            else:
+                already_processed_enriched_songs, unprocessed_raw_songs = [], raw_songs
+                
+            print(f"[spotify_search] Found {len(already_processed_enriched_songs)} already processed songs")
+            print(f"[spotify_search] Found {len(unprocessed_raw_songs)} unprocessed songs")
+            print(f"[spotify_search] Found {len(raw_songs)} total songs")
 
             # Calculate total progress steps: song processing + LLM search + result processing
-            total_progress_steps = len(unprocessed_raw_songs) + 2  # +1 for LLM search
+            total_progress_steps = len(unprocessed_raw_songs + already_processed_enriched_songs) + 2  # +1 for LLM search
             
             # Emit initial progress
             yield f"data: {json.dumps({'type': 'progress', 'processed': 0, 'total': total_progress_steps, 'message': f'Cannoli is listening to your music...'})}\n\n"
@@ -306,9 +319,9 @@ async def spotify_search(
                 'total_requests': 0
             }
             
-            if unprocessed_raw_songs:
+            if len(unprocessed_raw_songs) > 0:
+                print(f"[spotify_search] Enriching {len(unprocessed_raw_songs)} songs")
                 last_yield_time = time.time()
-                durations = []
                 for song, token_usage in enrich_songs(unprocessed_raw_songs):                
                     enriched_songs.append(song)
                     # Update token usage
@@ -325,7 +338,19 @@ async def spotify_search(
                         await asyncio.sleep(0.1)
                 
                 # Save newly enriched songs to database
-                save_enriched_songs_to_db(enriched_songs)
+                if not SKIP_SUPABASE_CACHE:
+                    save_enriched_songs_to_db(enriched_songs)
+            else:
+                print(f"[spotify_search] No unprocessed songs found, using already processed songs")
+                # Simulate progress for already processed songs to show smooth progress bar
+                batch_size = max(1, len(already_processed_enriched_songs) // 10)  # Show ~10 progress updates
+                for i in range(0, len(already_processed_enriched_songs), batch_size):
+                    current_processed = min(i + batch_size, len(already_processed_enriched_songs))
+                    song = already_processed_enriched_songs[min(i, len(already_processed_enriched_songs) - 1)]
+                    progress_update_copy = get_progress_update_copy(current_processed, total_progress_steps, song)
+                    yield f"data: {json.dumps({'type': 'progress', 'processed': current_processed, 'total': total_progress_steps, 'message': progress_update_copy})}\n\n"
+                    await asyncio.sleep(0.2)  # Slightly longer delay to make progress visible
+
             
             # Combine all enriched songs
             all_enriched_songs = already_processed_enriched_songs + enriched_songs
@@ -334,20 +359,17 @@ async def spotify_search(
             await asyncio.sleep(0.1)
             
             # Update progress for LLM search step
-            llm_search_progress = len(unprocessed_raw_songs) + 1
+            llm_search_progress = len(all_enriched_songs) + 1
             yield f"data: {json.dumps({'type': 'progress', 'processed': llm_search_progress, 'total': total_progress_steps, 'message': f'Cannoli is analyzing your music...'})}\n\n"
             await asyncio.sleep(0.1)
             
             # Search through the enriched songs using LLM
             llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
-            #relevant_songs, search_token_usage = search_library(llm_client, all_enriched_songs, query, n=3, chunk_size=100, verbose=True)
-            # TODO: REMOVE
-            relevant_songs = all_enriched_songs[:3]
-            search_token_usage = {
-                'total_input_tokens': 0,
-                'total_output_tokens': 0,
-                'total_requests': 0
-            }
+            if SKIP_EXPENSIVE_STEPS:
+                relevant_songs, search_token_usage = all_enriched_songs[:3], {}
+                time.sleep(3)
+            else:
+                relevant_songs, search_token_usage = search_library(llm_client, all_enriched_songs, query, n=3, chunk_size=100, verbose=True)
 
             print(f"[spotify_search] Done searching")
             

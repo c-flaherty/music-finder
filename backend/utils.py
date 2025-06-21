@@ -24,11 +24,18 @@ from search_library.clients import TextPrompt
 supabase_url = os.getenv('SUPABASE_URL')
 supabase_service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
-SET_MAX_SONGS_FORR_DEBUG: int | None = None
+SKIP_EXPENSIVE_STEPS: bool = True
+SKIP_SUPABASE_CACHE: bool = True
+SET_MAX_SONGS_FORR_DEBUG: int | None = 100
 
 # --------------------------- Lyrics helper ---------------------------
 def get_lyrics(song_name: str, artist_names: list[str]) -> str:
     """Fetch plain-text lyrics from Genius for the given song/artist."""
+
+    if SKIP_EXPENSIVE_STEPS:
+        time.sleep(0.2)
+        return ""
+    
     search_query = f"{song_name} {', '.join(artist_names)}"
     print(f"[DEBUG] Searching for lyrics for: {search_query}")
     
@@ -123,9 +130,9 @@ def get_lyrics(song_name: str, artist_names: list[str]) -> str:
 def get_song_metadata(song_name: str, artist_names: list[str]) -> tuple[str, dict]:
     """Ask LLM with search tool to research the song."""
 
-    # TODO: REMOVE
-    time.sleep(random.uniform(0.5, 1))
-    return "", {}
+    if SKIP_EXPENSIVE_STEPS:
+        time.sleep(0.2)
+        return "", {}
 
     llm_client = get_client("openai-direct", model_name="gpt-4o-mini-search-preview", enable_web_search=True)
     prompt = get_song_metadata_query(song_name, artist_names)
@@ -218,11 +225,11 @@ def fetch_already_processed_enriched_songs(raw_songs: list[RawSong]) -> tuple[li
     try:
         # Query the database for all songs with matching IDs
         response = supabase.table('songs').select('*').in_('id', song_ids).execute()
-        print(f"[spotify_search] Response: {response}")
+        #print(f"[spotify_search] Response: {response}")
         
         # Create a dictionary of processed songs by ID for quick lookup
         processed_songs_dict = {song['id']: song for song in response.data}
-        print(f"[spotify_search] Processed songs dict: {processed_songs_dict}")
+        #print(f"[spotify_search] Processed songs dict: {processed_songs_dict}")
         
         # Iterate through raw songs and categorize them
         for raw_song in raw_songs:
@@ -355,7 +362,7 @@ def enrich_songs(songs: list[RawSong]):
                 # Aggregate token usage
                 total_enrichment_tokens['total_input_tokens'] += token_usage.get('input_tokens', 0)
                 total_enrichment_tokens['total_output_tokens'] += token_usage.get('output_tokens', 0)
-                total_enrichment_tokens['total_requests'] += 1
+                total_enrichment_tokens['total_requests'] += 1 if not SKIP_EXPENSIVE_STEPS else 0
                 
                 yield enriched_song, total_enrichment_tokens
             except Exception as e:
