@@ -13,8 +13,6 @@ interface SearchResultsProps {
 export function SearchResults({ searchResults, tokenUsage }: SearchResultsProps) {
   const [showTokenUsage, setShowTokenUsage] = useState(false);
 
-  console.log("searchResults", searchResults);
-
   if (searchResults.length === 0) {
     return null;
   }
