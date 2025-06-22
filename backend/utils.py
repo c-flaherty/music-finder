@@ -34,7 +34,7 @@ def get_lyrics(song_name: str, artist_names: list[str]) -> str:
 
     if SKIP_EXPENSIVE_STEPS:
         time.sleep(0.2)
-        return ""
+        return f"these are lyrics for {song_name} by {', '.join(artist_names)}"
     
     search_query = f"{song_name} {', '.join(artist_names)}"
     print(f"[DEBUG] Searching for lyrics for: {search_query}")
@@ -132,7 +132,7 @@ def get_song_metadata(song_name: str, artist_names: list[str]) -> tuple[str, dic
 
     if SKIP_EXPENSIVE_STEPS:
         time.sleep(0.2)
-        return "", {}
+        return f"this is a song description for {song_name} by {', '.join(artist_names)}", {}
 
     llm_client = get_client("openai-direct", model_name="gpt-4o-mini-search-preview", enable_web_search=True)
     prompt = get_song_metadata_query(song_name, artist_names)

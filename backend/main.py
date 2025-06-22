@@ -1,4 +1,5 @@
 # api/spotify_search.py
+import copy
 import json, asyncio, os, requests, base64, urllib.request, urllib.parse
 import random
 from datetime import datetime
@@ -408,7 +409,9 @@ async def spotify_search(
             # Search through the enriched songs using LLM
             llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
             if SKIP_EXPENSIVE_STEPS:
-                relevant_songs, search_token_usage = all_enriched_songs[:3], {}
+                relevant_songs, search_token_usage = copy.deepcopy(all_enriched_songs[:3]), {}
+                for song in relevant_songs:
+                    song.reasoning = f"this is why I think {song.name} by {', '.join(song.artists)} is relevant to the query"
                 time.sleep(3)
             else:
                 relevant_songs, search_token_usage = search_library(llm_client, all_enriched_songs, query, n=3, chunk_size=100, verbose=True)
