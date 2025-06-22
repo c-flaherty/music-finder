@@ -51,24 +51,8 @@ export function useSearch() {
     }
   }, []);
 
-  // Auto-search effect when shouldAutoSearch is true and user is authenticated
-  useEffect(() => {
-    if (shouldAutoSearch && isAuthenticated && search.trim() && !isSearching) {
-      setShouldAutoSearch(false); // Reset the flag
-      // Trigger search programmatically by calling the search logic directly
-      const triggerSearch = async () => {
-        // We need to call handleSearch but it's not in scope here
-        // So we'll dispatch a form submission event instead
-        const form = document.querySelector('form[data-search-form]');
-        if (form) {
-          const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
-          form.dispatchEvent(submitEvent);
-        }
-      };
-      
-      triggerSearch();
-    }
-  }, [shouldAutoSearch, isAuthenticated, search, isSearching, setShouldAutoSearch]);
+  // Store a ref to track if auto-search should be triggered
+  const autoSearchTriggeredRef = useRef(false);
 
   // Message animation effect
   useEffect(() => {
@@ -171,6 +155,8 @@ export function useSearch() {
     e.preventDefault();
     if (!search.trim()) return;
 
+    // Reset auto-search ref when starting any search (manual or auto)
+    autoSearchTriggeredRef.current = false;
     setIsSearching(true);
     setShowProgress(false);
     setAnimatedProgress(0);
@@ -354,6 +340,51 @@ export function useSearch() {
       }
     }
   }, [search, getValidToken, handleUnauthorized, totalEvents]);
+
+  // Store the handleSearch function in a ref to avoid dependency issues
+  const handleSearchRef = useRef<((e: React.FormEvent) => void) | null>(null);
+  
+  // Update the ref whenever handleSearch changes
+  useEffect(() => {
+    handleSearchRef.current = handleSearch;
+  }, [handleSearch]);
+  
+  // Auto-search effect when shouldAutoSearch is true and user is authenticated
+  useEffect(() => {    
+    const pendingAutoSearch = localStorage.getItem('pending_auto_search') === 'true';
+    
+    if ((shouldAutoSearch || pendingAutoSearch) && isAuthenticated && search.trim() && !isSearching && !autoSearchTriggeredRef.current) {
+      autoSearchTriggeredRef.current = true; // Prevent multiple triggers
+      setShouldAutoSearch(false); // Reset the flag
+      localStorage.removeItem('pending_auto_search'); // Clear the backup flag
+      
+      // Create a synthetic form event and call handleSearch directly
+      if (handleSearchRef.current) {
+        const syntheticEvent = new Event('submit') as unknown as React.FormEvent;
+        Object.defineProperty(syntheticEvent, 'preventDefault', {
+          value: () => {},
+          writable: false
+        });
+        
+        // Call handleSearch directly with the synthetic event
+        handleSearchRef.current(syntheticEvent);
+      } else {
+        // Defer the auto-search by a short delay
+        setTimeout(() => {
+          if (handleSearchRef.current) {
+            const syntheticEvent = new Event('submit') as unknown as React.FormEvent;
+            Object.defineProperty(syntheticEvent, 'preventDefault', {
+              value: () => {},
+              writable: false
+            });
+            handleSearchRef.current(syntheticEvent);
+          }
+        }, 100);
+      }
+    } else {
+      console.log('Conditions not met for auto-search');
+    }
+  }, [shouldAutoSearch, isAuthenticated, search, isSearching, setShouldAutoSearch]);
 
   // Cleanup function for component unmount
   useEffect(() => {

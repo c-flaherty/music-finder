@@ -45,7 +45,7 @@ export const useAuth = () => {
         }
         setIsAuthenticated(true);
 
-        // Clean up URL to remove tokens and start_search
+        // Clean up URL to remove tokens and start_search (but keep q)
         const newUrl = new URL(window.location.href);
         newUrl.searchParams.delete('access_token');
         newUrl.searchParams.delete('refresh_token');
@@ -55,7 +55,14 @@ export const useAuth = () => {
 
         // If start_search is true and we have a search query, trigger search automatically
         if (startSearch && q && q.trim()) {
+          console.log('[AUTH] Setting shouldAutoSearch=true for query:', q);
+          console.trace('[AUTH] Stack trace for setShouldAutoSearch(true):');
+          // Also store in localStorage as a backup
+          localStorage.setItem('pending_auto_search', 'true');
           setShouldAutoSearch(true);
+        } else {
+          console.log('[AUTH] Not setting auto-search. startSearch:', startSearch, 'q:', q);
+          localStorage.removeItem('pending_auto_search');
         }
       }
     }
