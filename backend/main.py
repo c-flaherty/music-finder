@@ -30,6 +30,9 @@ from search_library.clients import get_client
 from search_library.prompts import get_song_metadata_query
 from search_library.clients import TextPrompt
 
+# Import instant search functionality
+from instant_llm import instant_search
+
 # Import utility functions from utils.py
 from utils import (
     get_lyrics,
@@ -273,6 +276,46 @@ async def spotify_search(
             yield f"data: {json.dumps({'type': 'start', 'message': 'Starting search...'})}\n\n"
             await asyncio.sleep(0.1)
             
+            # Try instant search first for lyric-heavy queries
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Checking for instant match...'})}\n\n"
+            await asyncio.sleep(0.1)
+            
+            instant_result, instant_token_usage = instant_search(query)
+            
+            if instant_result:
+                # We found an instant match! Return it immediately
+                print(f"[spotify_search] Found instant match: {instant_result.name} by {', '.join(instant_result.artists)}")
+                
+                yield f"data: {json.dumps({'type': 'status', 'message': 'Found instant match!'})}\n\n"
+                await asyncio.sleep(0.1)
+                
+                # Convert to dictionary format for frontend
+                song_dict = asdict(instant_result)
+                song_dict['artist'] = ', '.join(instant_result.artists) if instant_result.artists else ''
+                song_dict['reasoning'] = getattr(instant_result, 'reasoning', '')
+                
+                # Emit final results with instant match
+                final_data = {
+                    'type': 'results',
+                    'results': [song_dict],
+                    'token_usage': {
+                        'total_input_tokens': instant_token_usage.get('total_input_tokens', 0),
+                        'total_output_tokens': instant_token_usage.get('total_output_tokens', 0),
+                        'total_requests': instant_token_usage.get('total_requests', 0),
+                        'instant_search': True,
+                        'instant_input_tokens': instant_token_usage.get('total_input_tokens', 0),
+                        'instant_output_tokens': instant_token_usage.get('total_output_tokens', 0),
+                        'instant_requests': instant_token_usage.get('total_requests', 0)
+                    }
+                }
+                yield f"data: {json.dumps(final_data)}\n\n"
+                print(f"[spotify_search] Instant search completed successfully")
+                return
+            
+            # No instant match found, continue with full search
+            yield f"data: {json.dumps({'type': 'status', 'message': 'No instant match found. Searching your playlists...'})}\n\n"
+            await asyncio.sleep(0.1)
+            
             # Emit status update
             yield f"data: {json.dumps({'type': 'status', 'message': 'Fetching playlists...'})}\n\n"
             await asyncio.sleep(0.1)
@@ -375,21 +418,25 @@ async def spotify_search(
             yield f"data: {json.dumps({'type': 'status', 'message': 'Processing results...'})}\n\n"
             await asyncio.sleep(0.1)
             
-            # Combine token usage from both processes
+            # Combine token usage from both processes (including instant search tokens)
             combined_token_usage = {
-                'total_input_tokens': search_token_usage.get('total_input_tokens', 0) + total_enrichment_tokens.get('total_input_tokens', 0),
-                'total_output_tokens': search_token_usage.get('total_output_tokens', 0) + total_enrichment_tokens.get('total_output_tokens', 0),
-                'total_requests': search_token_usage.get('total_requests', 0) + total_enrichment_tokens.get('total_requests', 0),
+                'total_input_tokens': search_token_usage.get('total_input_tokens', 0) + total_enrichment_tokens.get('total_input_tokens', 0) + instant_token_usage.get('total_input_tokens', 0),
+                'total_output_tokens': search_token_usage.get('total_output_tokens', 0) + total_enrichment_tokens.get('total_output_tokens', 0) + instant_token_usage.get('total_output_tokens', 0),
+                'total_requests': search_token_usage.get('total_requests', 0) + total_enrichment_tokens.get('total_requests', 0) + instant_token_usage.get('total_requests', 0),
                 'requests_breakdown': search_token_usage.get('requests_breakdown', []),
                 'enrichment_requests': total_enrichment_tokens.get('total_requests', 0),
                 'search_requests': search_token_usage.get('total_requests', 0),
+                'instant_requests': instant_token_usage.get('total_requests', 0),
                 'enrichment_input_tokens': total_enrichment_tokens.get('total_input_tokens', 0),
                 'enrichment_output_tokens': total_enrichment_tokens.get('total_output_tokens', 0),
                 'search_input_tokens': search_token_usage.get('total_input_tokens', 0),
-                'search_output_tokens': search_token_usage.get('total_output_tokens', 0)
+                'search_output_tokens': search_token_usage.get('total_output_tokens', 0),
+                'instant_input_tokens': instant_token_usage.get('total_input_tokens', 0),
+                'instant_output_tokens': instant_token_usage.get('total_output_tokens', 0)
             }
             
             print(f"[spotify_search] Token usage summary:")
+            print(f"  Instant: {instant_token_usage}")
             print(f"  Enrichment: {total_enrichment_tokens}")
             print(f"  Search: {search_token_usage}")
             print(f"  Combined: {combined_token_usage}")
