@@ -8,3 +8,13 @@ export const chatMessages = [
     { sender: "friend", text: "r/NameThatSong" },
     { sender: "friend", text: "or cannoli.world" },
   ];
+
+export const placeholderTexts = [
+"that song about a roof in New York?",
+"the one that goes yeah yeah yeah",
+"song with the guitar solo",
+"early 2000s rock song",
+"that catchy chorus from TikTok",
+"the song from that movie",
+"upbeat song with drums"
+];

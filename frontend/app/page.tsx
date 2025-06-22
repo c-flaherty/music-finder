@@ -15,6 +15,7 @@ import { ChatMessages } from './components/ChatMessages';
 import { ProgressSection } from './components/ProgressSection';
 import { useAuth } from './hooks/useAuth';
 import { useSearch } from './hooks/useSearch';
+import { placeholderTexts as placeholderTextsConstants } from './constants';
 
 export default function Home() {
   const router = useRouter();
@@ -33,15 +34,7 @@ export default function Home() {
     handleSearch,
   } = useSearch();
 
-  const placeholderTexts = useMemo(() => [
-    "that song about a roof in New York?",
-    "the one that goes yeah yeah yeah",
-    "song with the guitar solo",
-    "early 2000s rock song",
-    "that catchy chorus from TikTok",
-    "the song from that movie",
-    "upbeat song with drums"
-  ], []);
+  const placeholderTexts = useMemo(() => placeholderTextsConstants, []);
 
   useEffect(() => {
     let startX = 0;
