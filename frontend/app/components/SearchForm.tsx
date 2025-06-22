@@ -50,7 +50,7 @@ export function SearchForm({
   return (
     <section className="w-full max-w-2xl mx-auto mb-8 md:mb-12 px-4">
       {/* Modern Search Bar */}
-      <form onSubmit={onSubmit} data-search-form className="w-full max-w-xl flex flex-col bg-white border border-[#DDCDA8] rounded-2xl shadow-md px-4 md:px-5 py-3 focus-within:ring-2 focus-within:ring-[#F6A23B] transition-all mx-4 relative">
+      <form onSubmit={onSubmit} data-search-form className="w-full max-w-xl mx-auto flex flex-col bg-white border border-[#DDCDA8] rounded-2xl shadow-md px-4 md:px-5 py-3 focus-within:ring-2 focus-within:ring-[#F6A23B] transition-all relative">
         <div className="flex items-start gap-3 mb-3">
           <textarea
             className="flex-1 bg-transparent outline-none py-2 text-base md:text-lg text-[#502D07] placeholder-[#838D5A] font-roobert resize-none overflow-hidden min-h-[3rem] max-h-32"
