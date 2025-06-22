@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 
 export const useTypingAnimation = (texts: string[], searchValue: string) => {
     const [currentPlaceholderIndex, setCurrentPlaceholderIndex] = useState(0);

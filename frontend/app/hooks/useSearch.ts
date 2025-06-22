@@ -353,7 +353,7 @@ export function useSearch() {
         animationRef.current = null;
       }
     }
-  }, [search, isSearching, getValidToken, handleUnauthorized, totalEvents]);
+  }, [search, getValidToken, handleUnauthorized, totalEvents]);
 
   // Cleanup function for component unmount
   useEffect(() => {

@@ -1,13 +1,13 @@
 "use client";
 import { useState } from "react";
-import { TokenUsage } from "../types";
+import { RequestBreakdown, TokenUsage } from "../types";
 
 interface TokenUsageDisplayProps {
   tokenUsage: TokenUsage;
 }
 
 // Token Usage Display Component
-export const TokenUsageDisplay = ({ tokenUsage }: { tokenUsage: TokenUsage }) => {
+export const TokenUsageDisplay = ({ tokenUsage }: TokenUsageDisplayProps) => {
     const [isExpanded, setIsExpanded] = useState(false);
   
     console.log('TokenUsageDisplay rendered with:', tokenUsage);
@@ -85,7 +85,7 @@ export const TokenUsageDisplay = ({ tokenUsage }: { tokenUsage: TokenUsage }) =>
           <div className="mt-3 pt-3 border-t border-[#DDCDA8]">
             <p className="text-xs text-[#502D07] font-medium mb-2">Request Breakdown:</p>
             <div className="space-y-1">
-              {tokenUsage.requests_breakdown.map((request: any, index: number) => (
+              {tokenUsage.requests_breakdown.map((request: RequestBreakdown, index: number) => (
                 <div key={index} className="text-xs text-[#502D07] flex justify-between">
                   <span>
                     {request.final_reduction ? 'Final reduction' : `Chunk ${index + 1}`}

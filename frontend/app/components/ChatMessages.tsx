@@ -1,7 +1,8 @@
 import { chatMessages } from '../constants';
+import { SearchResult } from '../types';
 
 interface ChatMessagesProps {
-  searchResults: any[];
+  searchResults: SearchResult[];
   isSearching: boolean;
   showProgress: boolean;
 }

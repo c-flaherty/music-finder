@@ -6,7 +6,7 @@ interface LyricsDisplayProps {
 }
 
 // Lyrics Display Component
-export const LyricsDisplay = ({ lyrics }: { lyrics: string }) => {
+export const LyricsDisplay = ({ lyrics }: LyricsDisplayProps) => {
     const [isExpanded, setIsExpanded] = useState(false);
   
     if (!lyrics || lyrics.trim() === '') {

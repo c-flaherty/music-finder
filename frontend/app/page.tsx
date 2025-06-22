@@ -1,13 +1,7 @@
 "use client";
-import Image from "next/image";
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { useRouter } from 'next/navigation';
+import { useMemo } from "react";
 
-import { SearchResult, TokenUsage } from './types';
 import { roobert } from './fonts';
-import { LyricsDisplay } from './components/LyricsDisplay';
-import { TokenUsageDisplay } from './components/TokenUsageDisplay';
-import { SpotifyPreviewImage } from './components/SpotifyPreviewImage';
 import { Header } from './components/Header';
 import { SearchForm } from './components/SearchForm';
 import { SearchResults } from './components/SearchResults';
@@ -19,7 +13,6 @@ import { useTouchPreventHorizontalScroll } from './hooks/useTouchPreventHorizont
 import { placeholderTexts as placeholderTextsConstants } from './constants';
 
 export default function Home() {
-  const router = useRouter();
   const { isAuthenticated, loading } = useAuth();
   const {
     search,
