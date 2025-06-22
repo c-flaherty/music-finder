@@ -26,6 +26,7 @@ supabase_service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
 SKIP_EXPENSIVE_STEPS: bool = False
 SKIP_SUPABASE_CACHE: bool = False
+SKIP_WEB_SEARCH_ENRICHMENT: bool = True
 HARDCODE_SONG_COUNT: int | None = None
 
 # --------------------------- Lyrics helper ---------------------------
@@ -134,6 +135,10 @@ def get_song_metadata(song_name: str, artist_names: list[str]) -> tuple[str, dic
         time.sleep(0.2)
         return f"this is a song description for {song_name} by {', '.join(artist_names)}", {}
 
+    if SKIP_WEB_SEARCH_ENRICHMENT:
+        time.sleep(0.2)
+        return "", {}
+
     llm_client = get_client("openai-direct", model_name="gpt-4o-mini-search-preview", enable_web_search=True)
     prompt = get_song_metadata_query(song_name, artist_names)
     response_tuple = llm_client.generate(
@@ -152,7 +157,7 @@ def get_song_metadata(song_name: str, artist_names: list[str]) -> tuple[str, dic
 def get_songs_from_playlists(playlists_data: Dict, access_token: str, query: str) -> list[RawSong]:
     all_songs = []
 
-    for playlist in playlists_data['items'][:5]:  # Limit to first 5 playlists
+    for playlist in playlists_data['items'][:100]:  # Limit to first 100 playlists
         tracks_response = requests.get(
             f"https://api.spotify.com/v1/playlists/{playlist['id']}/tracks",
             headers={
@@ -166,7 +171,7 @@ def get_songs_from_playlists(playlists_data: Dict, access_token: str, query: str
 
         tracks_data = tracks_response.json()
         
-        for item in tracks_data['items'][:100]:  # Safety cap per playlist
+        for item in tracks_data['items'][:2000]:  # Safety cap per playlist
             track_data = item.get('track')
             if not track_data or not track_data.get('id'):
                 continue
@@ -395,7 +400,7 @@ def get_playlist_names(access_token: str, refresh_token: Optional[str] = None) -
     Fetch user's playlists from Spotify API with automatic token refresh if needed.
     """
     playlists_response = requests.get(
-        'https://api.spotify.com/v1/me/playlists?limit=50',
+        'https://api.spotify.com/v1/me/playlists?limit=500',
         headers={
             'Authorization': f'Bearer {access_token}',
             'Content-Type': 'application/json'
@@ -406,7 +411,7 @@ def get_playlist_names(access_token: str, refresh_token: Optional[str] = None) -
         # Token expired, try to refresh
         new_token = refresh_access_token(refresh_token)
         playlists_response = requests.get(
-            'https://api.spotify.com/v1/me/playlists?limit=50',
+            'https://api.spotify.com/v1/me/playlists?limit=500',
             headers={
                 'Authorization': f'Bearer {new_token}',
                 'Content-Type': 'application/json'
