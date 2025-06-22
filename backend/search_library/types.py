@@ -38,6 +38,7 @@ class Song(RawSong):
     lyrics: str
     song_metadata: str
     reasoning: str = field(default_factory=lambda: "")
+    embedding: list[float] = field(default_factory=lambda: [])
     
     def __str__(self):
         return f"""

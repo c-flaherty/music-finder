@@ -14,7 +14,7 @@ backend_dir = os.path.dirname(current_dir)
 search_lib_dir = os.path.join(backend_dir, 'search_library')
 sys.path.insert(0, backend_dir)
 
-from search_library.search import search_library
+from search_library.search import search_library, create_song_embedding
 from search_library.types import Song as SearchSong, RawSong
 from search_library.clients import get_client
 from search_library.prompts import get_song_metadata_query
@@ -27,7 +27,7 @@ supabase_service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 SKIP_EXPENSIVE_STEPS: bool = False
 SKIP_SUPABASE_CACHE: bool = False
 SKIP_WEB_SEARCH_ENRICHMENT: bool = True
-HARDCODE_SONG_COUNT: int | None = None
+HARDCODE_SONG_COUNT: int | None = 10
 
 # --------------------------- Lyrics helper ---------------------------
 def get_lyrics(song_name: str, artist_names: list[str]) -> str:
@@ -265,7 +265,8 @@ def fetch_already_processed_enriched_songs(raw_songs: list[RawSong]) -> tuple[li
                     album=db_song['album'],
                     song_link=db_song['song_link'],
                     lyrics=db_song.get('lyrics', ''),
-                    song_metadata=db_song.get('song_metadata', '')
+                    song_metadata=db_song.get('song_metadata', ''),
+                    embedding=db_song.get('embedding', [])
                 )
                 already_processed_enriched_songs.append(enriched_song)
             else:
@@ -311,7 +312,8 @@ def save_enriched_songs_to_db(enriched_songs: list[SearchSong]) -> None:
                 'album': song.album,
                 'song_link': song.song_link,
                 'lyrics': song.lyrics,
-                'song_metadata': song.song_metadata
+                'song_metadata': song.song_metadata,
+                #'embedding': song.embedding
             }
             songs_data.append(song_data)
         
@@ -338,10 +340,12 @@ def enrich_songs(songs: list[RawSong]):
         lyrics = ""  # Initialize lyrics variable
         song_metadata = ""
         token_usage = {}
+        embedding = []
         try:
             ## Commented out for now to test frontend quickly
             lyrics = get_lyrics(song.name, song.artists)
             song_metadata, token_usage = get_song_metadata(song.name, song.artists)
+            embedding = create_song_embedding(song)
             # if lyrics:
             #     print(f"[LYRICS SUCCESS] {song.name} - {', '.join(song.artists)}")
             # else:
@@ -349,14 +353,16 @@ def enrich_songs(songs: list[RawSong]):
             return SearchSong(
                 **song.__dict__,
                 lyrics=lyrics,
-                song_metadata=song_metadata
+                song_metadata=song_metadata,
+                #embedding=embedding
             ), token_usage
         except Exception as e:
             print(f"[LYRICS FAIL] {song.name} - {', '.join(song.artists)} (error: {e})")
             return SearchSong(
                 **song.__dict__,
                 lyrics=lyrics,  # Now lyrics is always defined
-                song_metadata=song_metadata
+                song_metadata=song_metadata,
+                #embedding=embedding
             ), {}
     
     if not songs:
@@ -400,7 +406,7 @@ def get_playlist_names(access_token: str, refresh_token: Optional[str] = None) -
     Fetch user's playlists from Spotify API with automatic token refresh if needed.
     """
     playlists_response = requests.get(
-        'https://api.spotify.com/v1/me/playlists?limit=500',
+        'https://api.spotify.com/v1/me/playlists?limit=50',
         headers={
             'Authorization': f'Bearer {access_token}',
             'Content-Type': 'application/json'
@@ -411,7 +417,7 @@ def get_playlist_names(access_token: str, refresh_token: Optional[str] = None) -
         # Token expired, try to refresh
         new_token = refresh_access_token(refresh_token)
         playlists_response = requests.get(
-            'https://api.spotify.com/v1/me/playlists?limit=500',
+            'https://api.spotify.com/v1/me/playlists?limit=50',
             headers={
                 'Authorization': f'Bearer {new_token}',
                 'Content-Type': 'application/json'

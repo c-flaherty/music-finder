@@ -2,6 +2,7 @@ from .prompts import get_basic_query, decode_assistant_response
 from .types import Song
 from .clients import LLMClient, TextPrompt
 import numpy as np
+from openai import OpenAI
 
 def search_library(client: LLMClient, library: list[Song], user_query: str, n: int = 3, chunk_size: int = 1000, verbose: bool = False) -> tuple[list[Song], dict]:
     """
@@ -147,5 +148,34 @@ def recursive_search(client: LLMClient, sublibrary: list[Song], user_query: str,
         print(len(result_songs))
 
     return result_songs, token_usage
+
+def create_song_embedding(song: Song, openai_client: OpenAI = None, model: str = "text-embedding-ada-002") -> list[float]:
+    """
+    Create an embedding for a song using OpenAI's embedding API.
+    
+    Args:
+        song: The song object to create an embedding for
+        openai_client: Optional OpenAI client instance. If None, creates a new one.
+        model: The embedding model to use (default: text-embedding-ada-002)
+    
+    Returns:
+        A list of floats representing the song's embedding
+    """
+    if openai_client is None:
+        openai_client = OpenAI()
+    
+    song_serialization = str(song)
+    
+    # Create embedding using OpenAI API
+    response = openai_client.embeddings.create(
+        model=model,
+        input=song_serialization,
+        encoding_format="float"
+    )
+    
+    # Extract the embedding vector from the response
+    embedding = response.data[0].embedding
+    
+    return embedding
     
     
