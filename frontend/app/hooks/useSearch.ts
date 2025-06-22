@@ -3,7 +3,7 @@ import { SearchResult, TokenUsage } from '../types';
 import { useAuth } from './useAuth';
 
 export function useSearch() {
-  const { getValidToken, handleUnauthorized } = useAuth();
+  const { getValidToken, handleUnauthorized, isAuthenticated, shouldAutoSearch, setShouldAutoSearch } = useAuth();
   const [search, setSearchState] = useState("");
   
   // Custom setSearch function that updates both state and URL
@@ -50,6 +50,25 @@ export function useSearch() {
       if (q) setSearchState(q);
     }
   }, []);
+
+  // Auto-search effect when shouldAutoSearch is true and user is authenticated
+  useEffect(() => {
+    if (shouldAutoSearch && isAuthenticated && search.trim() && !isSearching) {
+      setShouldAutoSearch(false); // Reset the flag
+      // Trigger search programmatically by calling the search logic directly
+      const triggerSearch = async () => {
+        // We need to call handleSearch but it's not in scope here
+        // So we'll dispatch a form submission event instead
+        const form = document.querySelector('form[data-search-form]');
+        if (form) {
+          const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+          form.dispatchEvent(submitEvent);
+        }
+      };
+      
+      triggerSearch();
+    }
+  }, [shouldAutoSearch, isAuthenticated, search, isSearching, setShouldAutoSearch]);
 
   // Message animation effect
   useEffect(() => {

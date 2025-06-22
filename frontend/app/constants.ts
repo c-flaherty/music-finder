@@ -5,8 +5,7 @@ export const chatMessages = [
     { sender: "friend", text: "dude wtf are you talking about" },
     { sender: "friend", text: "how would i know" },
     { sender: "user", text: "no bc it's the one with the guitar solo" },
-    { sender: "friend", text: "r/NameThatSong" },
-    { sender: "friend", text: "or cannoli.world" },
+    { sender: "friend", text: "try cannoli.world" },
   ];
 
 export const placeholderTexts = [
