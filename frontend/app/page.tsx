@@ -192,15 +192,6 @@ export default function Home() {
       
       // Update ref immediately for next animation frame
       currentAnimatedProgressRef.current = smoothedProgress;
-
-      // print all variabesl
-      console.log("totalEvents", totalEvents);
-      console.log("completedEvents", completedEvents);
-      console.log("lastFinishTime", lastFinishTime);
-      console.log("avgDelta", avgDelta);
-      console.log("smoothedProgress", smoothedProgress);
-      console.log("currentProgress", currentProgress);
-      console.log("progressDiff", progressDiff);
       
       setAnimatedProgress(smoothedProgress); // animatedProgress gets the smooth interpolation
       
