@@ -19,14 +19,15 @@ from search_library.types import Song as SearchSong, RawSong
 from search_library.clients import get_client
 from search_library.prompts import get_song_metadata_query
 from search_library.clients import TextPrompt
+from search_library.web_search import search_internet
 
 # Environment variables
 supabase_url = os.getenv('SUPABASE_URL')
 supabase_service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
 SKIP_EXPENSIVE_STEPS: bool = False
-SKIP_SUPABASE_CACHE: bool = False
-SKIP_WEB_SEARCH_ENRICHMENT: bool = True
+SKIP_SUPABASE_CACHE: bool = True
+SKIP_WEB_SEARCH_ENRICHMENT: bool = False
 HARDCODE_SONG_COUNT: int | None = 10
 
 # --------------------------- Lyrics helper ---------------------------
@@ -129,8 +130,8 @@ def get_lyrics(song_name: str, artist_names: list[str]) -> str:
     return lyrics
 
 def get_song_metadata(song_name: str, artist_names: list[str]) -> tuple[str, dict]:
-    """Ask LLM with search tool to research the song."""
-
+    """Search the web for song information and ask LLM to summarize it."""
+    print(f"[DEBUG] Getting song metadata for: {song_name} by {', '.join(artist_names)}")
     if SKIP_EXPENSIVE_STEPS:
         time.sleep(0.2)
         return f"this is a song description for {song_name} by {', '.join(artist_names)}", {}
@@ -139,20 +140,61 @@ def get_song_metadata(song_name: str, artist_names: list[str]) -> tuple[str, dic
         time.sleep(0.2)
         return "", {}
 
-    llm_client = get_client("openai-direct", model_name="gpt-4o-mini-search-preview", enable_web_search=True)
-    prompt = get_song_metadata_query(song_name, artist_names)
-    response_tuple = llm_client.generate(
-        [[TextPrompt(text=prompt)]], # Note the double brackets
-        max_tokens=1000
-    )
-    response_blocks = response_tuple[0] # This is list[AssistantContentBlock]
-    first_block = response_blocks[0] # This is the first AssistantContentBlock
-    response_text = first_block.text # This is the text content
+    # Step 1: Search the web for information about the song and artist
+    search_query = f'"{song_name}" by {", ".join(artist_names)} background info genre history cultural significance'
     
-    # Extract token usage from metadata
-    token_usage = response_tuple[1] if len(response_tuple) > 1 else {}
-    
-    return response_text, token_usage
+    try:
+        start_time = time.time()
+        # Get web search results
+        search_results = search_internet(search_query, top_n=3)
+        end_time = time.time()
+        print(f"Time taken to search internet: {end_time - start_time} seconds")
+        
+        if not search_results:
+            print(f"[DEBUG] No web search results found for {song_name}")
+            return "", {}
+        
+        # Combine all search results into one text
+        combined_search_text = "\n\n---\n\n".join(search_results)
+        
+        # Step 2: Send to OpenAI for summarization
+        start_time = time.time()
+        llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
+        
+        summarization_prompt = f"""
+Based on the following web search results about the song "{song_name}" by {', '.join(artist_names)}, please provide a comprehensive summary that addresses these specific questions:
+
+1. What is the genre of this song?
+2. What time period was it written in?
+3. What musical movement does it come from?
+4. What does it reference (lyrically, musically, culturally)?
+5. What is its cultural significance?
+
+Please structure your response to clearly address each of these questions.
+
+Web search results:
+{combined_search_text[:4000]}  # Limit to avoid token limits
+"""
+        
+        response_tuple = llm_client.generate(
+            [[TextPrompt(text=summarization_prompt)]],
+            max_tokens=4000
+        )
+        end_time = time.time()
+        print(f"Time taken to get summary from openai: {end_time - start_time} seconds")
+        response_blocks = response_tuple[0]
+        first_block = response_blocks[0]
+        response_text = first_block.text
+        
+        # Extract token usage from metadata
+        token_usage = response_tuple[1] if len(response_tuple) > 1 else {}
+        
+        print(f"[DEBUG] Generated metadata summary for {song_name}, {response_text}")
+        return response_text, token_usage
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to get song metadata for {song_name}: {e}")
+        return "", {}
 
 def get_songs_from_playlists(playlists_data: Dict, access_token: str, query: str) -> list[RawSong]:
     all_songs = []
@@ -337,6 +379,7 @@ def enrich_songs(songs: list[RawSong]):
     
     def enrich_single_song(song: RawSong) -> tuple[SearchSong, dict]:
         """Enrich a single song with lyrics and metadata."""
+        print(f"[spotify_search] Enriching song: {song.name} - {', '.join(song.artists)}")
         lyrics = ""  # Initialize lyrics variable
         song_metadata = ""
         token_usage = {}
@@ -371,7 +414,7 @@ def enrich_songs(songs: list[RawSong]):
     # Process songs in parallel with a reasonable number of workers
     max_workers = min(50, len(songs))
     last_emit_time = time.time()
-    
+    print(f"[spotify_search] Enriching {len(songs)} songs with {max_workers} workers")
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all enrichment tasks
         future_to_song = {executor.submit(enrich_single_song, song): song for song in songs}
