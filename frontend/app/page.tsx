@@ -20,6 +20,7 @@ export default function Home() {
     searchResults,
     tokenUsage,
     isSearching,
+    stage,
     animatedProgress,
     showProgress,
     displayMessage,
@@ -62,6 +63,7 @@ export default function Home() {
       {/* Progress Bar */}
       <ProgressSection 
         isSearching={isSearching}
+        stage={stage}
         animatedProgress={animatedProgress}
         displayMessage={displayMessage}
         messageAnimating={messageAnimating}
@@ -70,13 +72,6 @@ export default function Home() {
 
       {/* Search Results */}
       <SearchResults searchResults={searchResults} tokenUsage={tokenUsage} />
-
-      {/* Chat Messages */}
-      <ChatMessages 
-        searchResults={searchResults}
-        isSearching={isSearching}
-        showProgress={showProgress}
-      />
     </div>
   );
 }
