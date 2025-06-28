@@ -1,148 +1,126 @@
-import os
-import time
+# fast_search.py  – revision: compatible with any trafilatura ≥1.4
+import os, time, requests, trafilatura
 from typing import List, Dict, Optional
-import requests
-import time
-import trafilatura
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from googleapiclient.discovery import build
 from dotenv import load_dotenv
-# Correctly load .env.local from the backend directory
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env.local'))
 
+# --------------------------------------------------------------------------- #
+#  One-time setup
+# --------------------------------------------------------------------------- #
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                     '.env.local'))
+
+_GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+_GOOGLE_CSE_ID  = os.getenv("GOOGLE_CSE_ID")
+if not _GOOGLE_API_KEY or not _GOOGLE_CSE_ID:
+    raise ValueError("GOOGLE_API_KEY and GOOGLE_CSE_ID env vars must be set")
+
+_SERVICE = build("customsearch", "v1",
+                 developerKey=_GOOGLE_API_KEY,
+                 cache_discovery=False)
+
+_SESSION = requests.Session()
+_SESSION.headers.update({
+    "User-Agent": "mini-crawler/0.3 (+https://example.org/bot)",
+    "Accept-Encoding": "gzip",
+})
+
+# --------------------------------------------------------------------------- #
+#  Public helpers – *unchanged* API
+# --------------------------------------------------------------------------- #
 def get_google_links(query: str, n: int = 3) -> List[str]:
-    """
-    Get the first n organic links from Google Custom Search API.
-    
-    Args:
-        query: Search query string
-        n: Number of results to return (default: 5)
-    
-    Returns:
-        List of URLs from search results
-    """
-    api_key = os.getenv("GOOGLE_API_KEY")
-    cse_id = os.getenv("GOOGLE_CSE_ID")
-    
-    if not api_key or not cse_id:
-        raise ValueError("GOOGLE_API_KEY and GOOGLE_CSE_ID environment variables must be set")
-    start_time = time.time()
-    try:
-        service = build("customsearch", "v1", developerKey=api_key)
-        resp = (service.cse()
-                      .list(q=query, cx=cse_id, num=n, fields="kind,items(title,link)")
-                      .execute())
-        end_time = time.time()
-        print(f"Time taken to get google links: {end_time - start_time} seconds")
-        return [item["link"] for item in resp.get("items", [])]
-    except Exception as e:
-        print(f"Error fetching Google search results: {e}")
-        return []
-
+    t0 = time.time()
+    resp = (_SERVICE.cse()
+                    .list(q=query,
+                          cx=_GOOGLE_CSE_ID,
+                          num=n,
+                          fields="items(link)")
+                    .execute())
+    elapsed = time.time() - t0
+    print(f"[PROFILE] get_google_links: {elapsed:.3f}s")
+    return [it["link"] for it in resp.get("items", [])]
 
 def fetch_clean_text(url: str, timeout: int = 15) -> Optional[str]:
     """
-    Download and clean page content using trafilatura.
-    
-    Args:
-        url: URL to fetch content from
-        timeout: Request timeout in seconds (default: 15) - Note: Not used by trafilatura.fetch_url
-    
-    Returns:
-        Cleaned text content or None if extraction failed
+    Download *url* with a shared Session, then extract main text using trafilatura.
+    Returns None on network/parse failure (same semantics as before).
     """
+    t0 = time.time()
     try:
-        start_time = time.time()
-        html = trafilatura.fetch_url(url)
-        if not html:
-            return None  # network issue or blocked request
-        
-        text = trafilatura.extract(html, include_comments=False)
-        end_time = time.time()
-        print(f"Time taken to extract text: {end_time - start_time} seconds")
-        return text
-    except Exception as e:
-        print(f"Error fetching content from {url}: {e}")
+        r = _SESSION.get(url, timeout=timeout, allow_redirects=True)
+        if not r.ok or not r.text:
+            elapsed = time.time() - t0
+            print(f"[PROFILE] fetch_clean_text (failed): {elapsed:.3f}s for {url[:60]}...")
+            return None
+        # url= lets trafilatura resolve relative links for metadata heuristics
+        result = trafilatura.extract(r.text, include_comments=False,
+                                   no_fallback=True, url=url)
+        elapsed = time.time() - t0
+        print(f"[PROFILE] fetch_clean_text (success): {elapsed:.3f}s for {url[:60]}...")
+        return result
+    except Exception as exc:
+        elapsed = time.time() - t0
+        print(f"[PROFILE] fetch_clean_text (error): {elapsed:.3f}s for {url[:60]}...")
+        print(f"[warn] fetch failed {url[:60]}…: {exc}")
         return None
 
+# --------------------------------------------------------------------------- #
+#  Parallel wrappers – unchanged interface
+# --------------------------------------------------------------------------- #
+def _parallel_fetch(urls: List[str], timeout: int = 15) -> List[Optional[str]]:
+    t0 = time.time()
+    out: List[Optional[str]] = [None] * len(urls)
+    with ThreadPoolExecutor(max_workers=min(8, len(urls))) as pool:
+        futures = {pool.submit(fetch_clean_text, u, timeout): i
+                   for i, u in enumerate(urls)}
+        for fut in as_completed(futures):
+            out[futures[fut]] = fut.result()
+    elapsed = time.time() - t0
+    print(f"[PROFILE] _parallel_fetch: {elapsed:.3f}s for {len(urls)} URLs")
+    return out
 
 def search_internet(query: str, top_n: int = 5) -> List[str]:
-    """
-    Search the internet for a query and return cleaned text from top results.
-    
-    Args:
-        query: Search query string
-        top_n: Number of top results to process (default: 5)
-    
-    Returns:
-        List of cleaned text content from search results
-    """
-    results = []
-    
-    # Get search result URLs
+    t0 = time.time()
     links = get_google_links(query, n=top_n)
-    
-    if not links:
-        print("No search results found")
-        return results
-    
-    # Fetch and clean content from each URL
-    for link in links:
-        text = fetch_clean_text(link)
-        if text:
-            results.append(text)
-        
-        # Polite crawl delay
-        time.sleep(1)
-    return results
+    texts = _parallel_fetch(links)
+    result = [t for t in texts if t]
+    elapsed = time.time() - t0
+    print(f"[PROFILE] search_internet: {elapsed:.3f}s total (query: '{query}', found {len(result)} docs)")
+    return result
 
-
-def search_internet_with_urls(query: str, top_n: int = 5) -> Dict[str, Optional[str]]:
-    """
-    Search the internet for a query and return a mapping of URLs to cleaned text.
-    
-    Args:
-        query: Search query string
-        top_n: Number of top results to process (default: 5)
-    
-    Returns:
-        Dictionary mapping URLs to their cleaned text content
-    """
-    corpus = {}
-    
-    # Get search result URLs
+def search_internet_with_urls(query: str,
+                              top_n: int = 5) -> Dict[str, Optional[str]]:
+    t0 = time.time()
     links = get_google_links(query, n=top_n)
-    
-    if not links:
-        print("No search results found")
-        return corpus
-    
-    # Fetch and clean content from each URL
-    for link in links:
-        text = fetch_clean_text(link)
-        corpus[link] = text[:4000]
-        
-        # Polite crawl delay
-        time.sleep(1)
-    
-    return corpus
+    texts = _parallel_fetch(links)
+    result = {u: (t[:4000] if t else None) for u, t in zip(links, texts)}
+    elapsed = time.time() - t0
+    successful_fetches = sum(1 for v in result.values() if v is not None)
+    print(f"[PROFILE] search_internet_with_urls: {elapsed:.3f}s total (query: '{query}', {successful_fetches}/{len(result)} successful)")
+    return result
 
-
+# --------------------------------------------------------------------------- #
+#  Quick smoke-test
+# --------------------------------------------------------------------------- #
 if __name__ == "__main__":
-    # Example usage
-    query = "quantum gravity overview"
-    
-    # Get just the text results
-    texts = search_internet(query)
-    print(f"Found {len(texts)} results:")
-    for i, text in enumerate(texts, 1):
-        print(f"\n--- Result {i} ---")
-        print(text[:400] if text else "No content extracted")
-        print("-" * 80)
-    
-    # Get results with URLs
-    docs = search_internet_with_urls(query)
-    print(f"\nFound {len(docs)} results with URLs:")
-    for url, text in docs.items():
-        print(f"\nURL: {url}")
-        print(f"Content: {text[:400] if text else 'No content extracted'}")
-        print("-" * 80) 
+    test_queries = [
+        "quantum gravity overview",
+        "deep learning tutorial",
+        "pf400 robot calibration",
+        "isaac sim reinforcement learning",
+        "vision language action models",
+        "self-supervised learning biology",
+        "plate handling robot safety",
+        "large language model benchmarks 2025",
+        "generative ai startup trends",
+        "custom ASIC acceleration pytorch"
+    ]
+
+    t_total = time.time()
+    for idx, q in enumerate(test_queries, 1):
+        t0 = time.time()
+        docs = search_internet(q, top_n=5)
+        elapsed = time.time() - t0
+        print(f"\n[{idx}/10] \"{q}\" → {len(docs)} docs in {elapsed:.2f}s")
+    print(f"\nCompleted {len(test_queries)} searches in {time.time() - t_total:.2f}s")
