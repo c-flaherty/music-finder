@@ -24,6 +24,7 @@ export function useSearch() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [stage, setStage] = useState<"enrichment" | "searching">("enrichment");
   const [animatedProgress, setAnimatedProgress] = useState(0);
   const [showProgress, setShowProgress] = useState(false);
   const animationRef = useRef<number | null>(null);
@@ -114,8 +115,8 @@ export function useSearch() {
       const isCatchingUp = completionRatio >= 0.8;
       
       if (isCatchingUp) {
-        // When 80%+ complete, jump target to 90% for catch-up animation
-        newTargetProgress = 0.9;
+        // When 80%+ complete, jump target to 100% for catch-up animation
+        newTargetProgress = 1.0;
       }
       
       // Smooth interpolation towards target progress (easing)
@@ -286,6 +287,7 @@ export function useSearch() {
                     setShowProgress(false);
                     setSearchResults([]);
                     setTokenUsage(null);
+                    setStage("enrichment");
                     
                     if (data.message) {
                       setMessage(data.message);
@@ -305,6 +307,10 @@ export function useSearch() {
                     setCompletedEvents(totalEvents || data.results?.length || 0);
                     setAnimatedProgress(1.0); // Complete the progress bar
                     setShowProgress(false);
+                  } else if (data.type === 'completion') {
+                    if (data.prev_stage === 'enrichment') {
+                      setStage("searching");
+                    }
                   } else if (data.type === 'error') {
                     console.error('Error:', data);
                     throw new Error(data.error);
@@ -403,6 +409,7 @@ export function useSearch() {
     searchResults,
     tokenUsage,
     isSearching,
+    stage,
     animatedProgress,
     showProgress,
     displayMessage,

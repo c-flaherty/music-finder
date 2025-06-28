@@ -50,7 +50,7 @@ export function SearchForm({
   return (
     <section className="w-full max-w-2xl mx-auto mb-8 md:mb-12 px-4">
       {/* Modern Search Bar */}
-      <form onSubmit={onSubmit} data-search-form className="w-full max-w-xl mx-auto flex flex-col bg-white border border-[#DDCDA8] rounded-2xl shadow-md px-4 md:px-5 py-3 focus-within:ring-2 focus-within:ring-[#F6A23B] transition-all relative">
+      <form onSubmit={onSubmit} data-search-form className="w-full max-w-xl mx-auto flex flex-col bg-white border border-[#DDCDA8] rounded-2xl shadow-md p-3 focus-within:ring-2 focus-within:ring-[#F6A23B] transition-all relative">
         <div className="flex items-start gap-3 mb-3">
           <textarea
             className="flex-1 bg-transparent outline-none py-2 text-base md:text-lg text-[#502D07] placeholder-[#838D5A] font-roobert resize-none overflow-hidden min-h-[3rem] max-h-32"
@@ -102,7 +102,7 @@ export function SearchForm({
           <button
             type="submit"
             onClick={handleAskClick}
-            className={`px-4 md:px-5 py-2 rounded-xl font-semibold shadow transition-colors font-roobert cursor-pointer ${!search.trim() ? 'bg-gray-400 text-white' : 'bg-[#01D75E] text-white hover:bg-[#01c055] active:bg-[#00b04d]'}`}
+            className={`px-4 md:px-5 py-2 rounded-xl font-semibold shadow transition-colors font-roobert cursor-pointer ${!search.trim() ? 'bg-gray-400 text-white' : 'bg-[#F6A23B] text-white hover:bg-[#D18A32] active:bg-[#D18A32]'}`}
             disabled={!search.trim()}
             ref={askButtonRef}
           >

@@ -132,6 +132,17 @@ body {
   90% { transform: translate(-5px, -5px) rotate(0deg); }
 }
 
+@keyframes gentleBounce {
+  0%, 100% { 
+    transform: translateY(0);
+    animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+  }
+  50% { 
+    transform: translateY(-12px);
+    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+}
+
 /* Animation Classes */
 .animate-fadeIn {
   animation: fadeIn 0.3s ease-out;
@@ -157,6 +168,10 @@ body {
 
 .animate-jitter {
   animation: jitter 1s infinite;
+}
+
+.animate-gentle-bounce {
+  animation: gentleBounce 1s infinite;
 }
 
 .animate-stagger-1 { animation-delay: 0.1s; }
