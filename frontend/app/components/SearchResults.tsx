@@ -12,18 +12,23 @@ interface SearchResultsProps {
   tokenUsage: TokenUsage | null;
 }
 
-interface SongCardColor {
+interface SongCardData {
   backgroundColor: string;
   textColor: string;
+  imageUrl: string | null;
 }
 
 export function SearchResults({ searchResults, tokenUsage }: SearchResultsProps) {
   const [showTokenUsage, setShowTokenUsage] = useState(false);
-  const [songColors, setSongColors] = useState<{ [songId: string]: SongCardColor }>({});
+  const [songColors, setSongColors] = useState<{ [songId: string]: SongCardData }>({});
+  const [colorsLoading, setColorsLoading] = useState(searchResults.length > 0);
 
   // Extract colors for each song when component mounts or searchResults change
   useEffect(() => {
     const extractColors = async () => {
+      setColorsLoading(true);
+      setSongColors({}); // Clear old colors immediately
+      
       const colorPromises = searchResults.map(async (song) => {
         try {
           const imageUrl = await getSpotifyPreviewImage(song.song_link);
@@ -36,7 +41,8 @@ export function SearchResults({ searchResults, tokenUsage }: SearchResultsProps)
               songId: song.id,
               colors: {
                 backgroundColor: gradientBg,
-                textColor: textColor
+                textColor: textColor,
+                imageUrl: imageUrl
               }
             };
           }
@@ -49,7 +55,8 @@ export function SearchResults({ searchResults, tokenUsage }: SearchResultsProps)
           songId: song.id,
           colors: {
             backgroundColor: 'linear-gradient(135deg, rgb(255, 255, 255) 0%, rgb(248, 250, 252) 100%)',
-            textColor: '#000000'
+            textColor: '#000000',
+            imageUrl: null
           }
         };
       });
@@ -58,13 +65,17 @@ export function SearchResults({ searchResults, tokenUsage }: SearchResultsProps)
       const colorMap = results.reduce((acc, result) => {
         acc[result.songId] = result.colors;
         return acc;
-      }, {} as { [songId: string]: SongCardColor });
+      }, {} as { [songId: string]: SongCardData });
 
       setSongColors(colorMap);
+      setColorsLoading(false);
     };
 
     if (searchResults.length > 0) {
       extractColors();
+    } else {
+      setColorsLoading(false);
+      setSongColors({});
     }
   }, [searchResults]);
 
@@ -98,13 +109,25 @@ export function SearchResults({ searchResults, tokenUsage }: SearchResultsProps)
       {/* Token Usage Display */}
       {tokenUsage && showTokenUsage && <TokenUsageDisplay tokenUsage={tokenUsage} />}
 
+      {/* Loading State */}
+      {colorsLoading && (
+        <div className="flex items-center justify-center py-8">
+          <div className="flex items-center gap-3 text-[#838D5A]">
+            <div className="w-5 h-5 border-2 border-[#838D5A] border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-sm font-medium">Preparing your results...</span>
+          </div>
+        </div>
+      )}
+
       {/* Song Cards */}
-      <div className="space-y-3 md:space-y-4">
-        {searchResults.map((song, index) => {
-          const cardColors = songColors[song.id] || {
-            backgroundColor: 'linear-gradient(135deg, rgb(255, 255, 255) 0%, rgb(248, 250, 252) 100%)',
-            textColor: '#000000'
-          };
+      {!colorsLoading && searchResults.every(song => songColors[song.id]) && (
+        <div className="space-y-3 md:space-y-4">
+          {searchResults.map((song, index) => {
+            const cardData = songColors[song.id] || {
+              backgroundColor: 'linear-gradient(135deg, rgb(255, 255, 255) 0%, rgb(248, 250, 252) 100%)',
+              textColor: '#000000',
+              imageUrl: null
+            };
 
           return (
             <a
@@ -115,9 +138,9 @@ export function SearchResults({ searchResults, tokenUsage }: SearchResultsProps)
               className="block"
             >
               <div 
-                className={`flex flex-col p-3 md:p-6 border border-[#DDCDA8] rounded-2xl shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all duration-100 cursor-pointer group animate-fadeInUp animate-stagger-${Math.min(index + 1, 5)}`}
+                className={`flex flex-col p-3 md:p-6 border border-[#DDCDA8] rounded-2xl shadow-md hover:shadow-lg hover:-translate-y-0.5 cursor-pointer group`}
                 style={{ 
-                  background: cardColors.backgroundColor,
+                  background: cardData.backgroundColor,
                 }}
               >
                 {/* Mobile Layout - Album cover top left with text wrapping */}
@@ -127,12 +150,18 @@ export function SearchResults({ searchResults, tokenUsage }: SearchResultsProps)
                     <div className="rounded-lg p-2">
                       {/* Album Image - Float left */}
                       <div className="float-left mr-3 mb-2">
-                        <SpotifyPreviewImage spotifyUrl={song.song_link} songName={song.name} title={song.name} artist={song.artists.join(', ')} />
+                        <SpotifyPreviewImage 
+                          spotifyUrl={song.song_link} 
+                          songName={song.name} 
+                          title={song.name} 
+                          artist={song.artists.join(', ')} 
+                          preloadedImageUrl={cardData.imageUrl}
+                        />
                       </div>
                       <p 
                         className="text-sm font-medium leading-relaxed"
                         style={{ 
-                          color: cardColors.textColor,
+                          color: cardData.textColor,
                         }}
                       >
                         {song.reasoning}
@@ -147,7 +176,13 @@ export function SearchResults({ searchResults, tokenUsage }: SearchResultsProps)
                 <div className="hidden sm:flex flex-row gap-4">
                   {/* Album Image */}
                   <div className="flex-shrink-0 self-center">
-                    <SpotifyPreviewImage spotifyUrl={song.song_link} songName={song.name} title={song.name} artist={song.artists.join(', ')} />
+                    <SpotifyPreviewImage 
+                      spotifyUrl={song.song_link} 
+                      songName={song.name} 
+                      title={song.name} 
+                      artist={song.artists.join(', ')} 
+                      preloadedImageUrl={cardData.imageUrl}
+                    />
                   </div>
 
                   {/* Content */}
@@ -158,7 +193,7 @@ export function SearchResults({ searchResults, tokenUsage }: SearchResultsProps)
                         <p 
                           className="text-sm font-medium"
                           style={{ 
-                            color: cardColors.textColor,
+                            color: cardData.textColor,
                             fontSize: '1.1em',
                             lineHeight: '1.5'
                           }}
@@ -176,7 +211,8 @@ export function SearchResults({ searchResults, tokenUsage }: SearchResultsProps)
             </a>
           );
         })}
-      </div>
+        </div>
+      )}
     </section>
   );
 }

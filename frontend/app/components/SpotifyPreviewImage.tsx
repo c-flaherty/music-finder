@@ -8,6 +8,7 @@ interface SpotifyPreviewImageProps {
   songName: string;
   title: string;
   artist: string;
+  preloadedImageUrl?: string | null;
 }
 
 // Component for Spotify Preview Image
@@ -15,17 +16,23 @@ export const SpotifyPreviewImage = ({
   spotifyUrl, 
   songName, 
   title, 
-  artist 
+  artist,
+  preloadedImageUrl 
 }: SpotifyPreviewImageProps) => {
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [imageUrl, setImageUrl] = useState<string | null>(preloadedImageUrl || null);
+  const [loading, setLoading] = useState(!preloadedImageUrl);
 
   useEffect(() => {
-    getSpotifyPreviewImage(spotifyUrl).then((url) => {
-      setImageUrl(url);
+    if (preloadedImageUrl) {
+      setImageUrl(preloadedImageUrl);
       setLoading(false);
-    });
-  }, [spotifyUrl]);
+    } else {
+      getSpotifyPreviewImage(spotifyUrl).then((url) => {
+        setImageUrl(url);
+        setLoading(false);
+      });
+    }
+  }, [spotifyUrl, preloadedImageUrl]);
 
   // Truncate text to fit overlay
   const truncateText = (text: string, maxLength: number) => {
@@ -42,11 +49,9 @@ export const SpotifyPreviewImage = ({
           <Image src="/logos/cannoli.png" alt="Cannoli logo" width={32} height={32} className="opacity-60" />
         </div>
       ) : imageUrl ? (
-        <Image
+        <img
           src={imageUrl}
           alt={`${songName} album cover`}
-          width={144}
-          height={144}
           className="w-full h-full object-cover"
           onError={(e) => {
             e.currentTarget.style.display = 'none';
