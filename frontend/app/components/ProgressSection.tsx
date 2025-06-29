@@ -32,7 +32,8 @@ export function ProgressSection({
             cx="80"
             cy="80"
             r="70"
-            stroke="#F7F7F7"
+            stroke="#000000"
+            strokeOpacity="0.05"
             strokeWidth="8"
             fill="none"
           />
@@ -120,7 +121,7 @@ export function ProgressSection({
       {/* Searching text */}
       <div className="text-center">
         <h3 className="text-lg font-['Proxima_Nova'] font-extrabold text-[#502D07] mb-2">
-          Searching!
+          Done listening to new songs! Searching now...
         </h3>
       </div>
     </>

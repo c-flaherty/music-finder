@@ -20,9 +20,7 @@ export function SearchResults({ searchResults, tokenUsage }: SearchResultsProps)
   return (
     <section className="w-full max-w-2xl mx-auto mb-12 md:mb-20 px-4 animate-fadeIn">
       {/* Header and Analytics */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-['Proxima_Nova'] font-extrabold text-[#502D07]">SEARCH RESULTS</h2>
-        
+      <div className="flex items-center justify-end mb-4">
         {/* Token Usage Toggle Button */}
         {tokenUsage && (
           <button
@@ -41,9 +39,6 @@ export function SearchResults({ searchResults, tokenUsage }: SearchResultsProps)
           </button>
         )}
       </div>
-
-      {/* Divider */}
-      <div className="w-full h-px bg-[#DDCDA8] mb-6"></div>
 
       {/* Token Usage Display */}
       {tokenUsage && showTokenUsage && <TokenUsageDisplay tokenUsage={tokenUsage} />}
@@ -78,7 +73,7 @@ export function SearchResults({ searchResults, tokenUsage }: SearchResultsProps)
                   )}
 
                   {/* Lyrics */}
-                  <LyricsDisplay lyrics={song.lyrics} />
+                  {/* <LyricsDisplay lyrics={song.lyrics} /> */}
                 </div>
               </div>
             </div>

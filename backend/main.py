@@ -274,7 +274,7 @@ async def spotify_search(
     async def event_stream():
         try:
             # Emit explicit start event to reset frontend progress
-            yield f"data: {json.dumps({'type': 'start', 'message': 'Starting search...'})}\n\n"
+            yield f"data: {json.dumps({'type': 'start', 'message': 'Listening to new songs...'})}\n\n"
             await asyncio.sleep(0.1)
             
             # Try instant search first for lyric-heavy queries
@@ -371,7 +371,7 @@ async def spotify_search(
                     total_enrichment_tokens = token_usage
 
                     current_time = time.time()
-                    if current_time - last_yield_time >= 1:
+                    if current_time - last_yield_time >= 4:
                         progress_update_copy = get_progress_update_copy(len(enriched_songs), total_progress_steps, song)
                         yield f"data: {json.dumps({'type': 'progress', 'processed': len(enriched_songs), 'total': total_progress_steps, 'message': progress_update_copy})}\n\n"
                         await asyncio.sleep(0.1)

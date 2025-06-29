@@ -3,6 +3,7 @@ import { useMemo } from "react";
 
 import { roobert } from './fonts';
 import { Header } from './components/Header';
+import { CompressedHeader } from './components/CompressedHeader';
 import { SearchForm } from './components/SearchForm';
 import { SearchResults } from './components/SearchResults';
 import { ChatMessages } from './components/ChatMessages';
@@ -33,6 +34,7 @@ export default function Home() {
   useTouchPreventHorizontalScroll();
 
   const placeholderTexts = useMemo(() => placeholderTextsConstants, []);
+  const hasSearchResults = searchResults.length > 0;
 
   if (loading) {
     return (
@@ -45,33 +47,58 @@ export default function Home() {
   }
 
   return (
-    <div className={`min-h-screen bg-[#FFF5D1] flex flex-col items-center py-8 md:py-12 px-4 ${roobert.variable} font-roobert`}>
+    <div className={`min-h-screen bg-[#FFF5D1] ${roobert.variable} font-roobert`}>
+      {hasSearchResults ? (
+        <>
+          {/* Compressed Header with Search - shown when results are available */}
+          <CompressedHeader 
+            search={search}
+            setSearch={setSearch}
+            isSearching={isSearching}
+            isAuthenticated={isAuthenticated}
+            onSubmit={handleSearch}
+            placeholderTexts={placeholderTexts}
+          />
+          
+          {/* Progress Bar */}
+          <ProgressSection 
+            isSearching={isSearching}
+            stage={stage}
+            animatedProgress={animatedProgress}
+            displayMessage={displayMessage}
+            messageAnimating={messageAnimating}
+            showLargeBatchAlert={showLargeBatchAlert}
+          />
 
-      {/* Header & Hero */}
-      <Header />
-      
-      {/* Search Section */}
-      <SearchForm 
-        search={search}
-        setSearch={setSearch}
-        isSearching={isSearching}
-        isAuthenticated={isAuthenticated}
-        onSubmit={handleSearch}
-        placeholderTexts={placeholderTexts}
-      />
+          {/* Search Results */}
+          <SearchResults searchResults={searchResults} tokenUsage={tokenUsage} />
+        </>
+      ) : (
+        <div className="flex flex-col items-center py-8 md:py-12 px-4">
+          {/* Header & Hero - shown when no results */}
+          <Header />
+          
+          {/* Search Section */}
+          <SearchForm 
+            search={search}
+            setSearch={setSearch}
+            isSearching={isSearching}
+            isAuthenticated={isAuthenticated}
+            onSubmit={handleSearch}
+            placeholderTexts={placeholderTexts}
+          />
 
-      {/* Progress Bar */}
-      <ProgressSection 
-        isSearching={isSearching}
-        stage={stage}
-        animatedProgress={animatedProgress}
-        displayMessage={displayMessage}
-        messageAnimating={messageAnimating}
-        showLargeBatchAlert={showLargeBatchAlert}
-      />
-
-      {/* Search Results */}
-      <SearchResults searchResults={searchResults} tokenUsage={tokenUsage} />
+          {/* Progress Bar */}
+          <ProgressSection 
+            isSearching={isSearching}
+            stage={stage}
+            animatedProgress={animatedProgress}
+            displayMessage={displayMessage}
+            messageAnimating={messageAnimating}
+            showLargeBatchAlert={showLargeBatchAlert}
+          />
+        </div>
+      )}
     </div>
   );
 }
