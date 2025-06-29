@@ -177,10 +177,25 @@ export const createGradientBackground = (baseColor: string): string => {
   
   const [, r, g, b] = match.map(Number);
   
-  // Create a slightly lighter version for gradient
-  const lighterR = Math.min(255, r + 20);
-  const lighterG = Math.min(255, g + 20);
-  const lighterB = Math.min(255, b + 20);
+  // Calculate the luminance to determine if we should lighten or darken
+  const luminance = getLuminance(r, g, b);
   
-  return `linear-gradient(135deg, ${baseColor} 0%, rgb(${lighterR}, ${lighterG}, ${lighterB}) 100%)`;
+  let adjustedR, adjustedG, adjustedB;
+  
+  // Determine adjustment based on brightness
+  if (luminance > 0.5) {
+    // Color is light - lighten it more dramatically
+    const adjustment = Math.round(60 + (luminance - 0.5) * 80); // 60-100 range
+    adjustedR = Math.min(255, r + adjustment);
+    adjustedG = Math.min(255, g + adjustment);
+    adjustedB = Math.min(255, b + adjustment);
+  } else {
+    // Color is dark - darken it more dramatically
+    const adjustment = Math.round(50 + (0.5 - luminance) * 70); // 50-85 range
+    adjustedR = Math.max(0, r - adjustment);
+    adjustedG = Math.max(0, g - adjustment);
+    adjustedB = Math.max(0, b - adjustment);
+  }
+  
+  return `linear-gradient(135deg, ${baseColor} 0%, rgb(${adjustedR}, ${adjustedG}, ${adjustedB}) 100%)`;
 }; 

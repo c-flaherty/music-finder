@@ -123,7 +123,7 @@ export function SearchResults({ searchResults, tokenUsage }: SearchResultsProps)
 
                 <div className="flex flex-row gap-4">
                   {/* Album Image */}
-                  <div className="flex-shrink-0">
+                  <div className="flex-shrink-0 self-center">
                     <SpotifyPreviewImage spotifyUrl={song.song_link} songName={song.name} title={song.name} artist={song.artists.join(', ')} />
                   </div>
 
@@ -136,7 +136,8 @@ export function SearchResults({ searchResults, tokenUsage }: SearchResultsProps)
                           className="text-sm font-medium"
                           style={{ 
                             color: cardColors.textColor,
-                            fontSize: '1.1em'
+                            fontSize: '1.1em',
+                            lineHeight: '1.5'
                           }}
                         >
                           {song.reasoning}
