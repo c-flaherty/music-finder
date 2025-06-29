@@ -28,6 +28,7 @@ export default function Home() {
     messageAnimating,
     showLargeBatchAlert,
     handleSearch,
+    resetSearch,
   } = useSearch();
 
   // Use the touch prevention hook
@@ -47,7 +48,7 @@ export default function Home() {
   }
 
   return (
-    <div className={`min-h-screen bg-[#FFF5D1] ${roobert.variable} font-roobert`}>
+    <div className={`min-h-screen ${hasSearchResults ? 'bg-[#FFFFFF]' : 'bg-[#FFF5D1]'} ${roobert.variable} font-roobert`}>
       {hasSearchResults ? (
         <>
           {/* Compressed Header with Search - shown when results are available */}
@@ -57,6 +58,7 @@ export default function Home() {
             isSearching={isSearching}
             isAuthenticated={isAuthenticated}
             onSubmit={handleSearch}
+            onReset={resetSearch}
             placeholderTexts={placeholderTexts}
           />
           
@@ -79,14 +81,14 @@ export default function Home() {
           <Header />
           
           {/* Search Section */}
-          <SearchForm 
+          {!isSearching && <SearchForm 
             search={search}
             setSearch={setSearch}
             isSearching={isSearching}
             isAuthenticated={isAuthenticated}
             onSubmit={handleSearch}
             placeholderTexts={placeholderTexts}
-          />
+          />}
 
           {/* Progress Bar */}
           <ProgressSection 

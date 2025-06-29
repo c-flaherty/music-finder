@@ -402,6 +402,45 @@ export function useSearch() {
     };
   }, []);
 
+  // Reset function to clear all search state
+  const resetSearch = useCallback(() => {
+    setSearchState("");
+    setSearchResults([]);
+    setTokenUsage(null);
+    setIsSearching(false);
+    setStage("enrichment");
+    setAnimatedProgress(0);
+    setShowProgress(false);
+    setMessage("");
+    setDisplayMessage("");
+    setMessageAnimating(false);
+    setTotalEvents(0);
+    setCompletedEvents(0);
+    setLastFinishTime(null);
+    setAvgDelta(1000);
+    setShowLargeBatchAlert(false);
+    currentAnimatedProgressRef.current = 0;
+    
+    // Clear URL params
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('q');
+      window.history.replaceState({}, '', url.toString());
+    }
+    
+    // Cancel any ongoing animation
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+    
+    // Cancel any ongoing reader
+    if (readerRef.current) {
+      readerRef.current.cancel();
+      readerRef.current = null;
+    }
+  }, []);
+
   return {
     // State
     search,
@@ -418,5 +457,6 @@ export function useSearch() {
     
     // Functions
     handleSearch,
+    resetSearch,
   };
 }

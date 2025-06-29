@@ -23,9 +23,17 @@ export function SearchForm({
   const [showAuthDropdown, setShowAuthDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const askButtonRef = useRef<HTMLButtonElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Use the typing animation hook
   const { animatedPlaceholder } = useTypingAnimation(placeholderTexts, search);
+
+  // Auto-focus the textarea when component mounts
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, []);
 
   useEffect(() => {
     if (!showAuthDropdown) return;
@@ -53,6 +61,7 @@ export function SearchForm({
       <form onSubmit={onSubmit} data-search-form className="w-full max-w-xl mx-auto flex flex-col bg-white border border-[#DDCDA8] rounded-2xl shadow-md p-3 focus-within:ring-2 focus-within:ring-[#F6A23B] transition-all relative">
         <div className="flex items-start gap-3 mb-3">
           <textarea
+            ref={textareaRef}
             className="flex-1 bg-transparent outline-none py-2 text-base md:text-lg text-[#502D07] placeholder-[#838D5A] font-roobert resize-none overflow-hidden min-h-[3rem] max-h-32"
             placeholder={animatedPlaceholder}
             value={search}
