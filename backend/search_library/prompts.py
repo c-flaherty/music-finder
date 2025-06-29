@@ -64,3 +64,66 @@ What is the genre? What time period was it written in?
 What is the musical movement it comes from? 
 What does it reference? What is its cultural significance?
 """
+
+def get_individual_song_reasoning_query(user_query: str, song: 'Song', similarity_score: float = None) -> str:
+    """
+    Generate a prompt for explaining why a single song matches a user's query.
+    
+    Args:
+        user_query: The user's search query
+        song: The Song object with all its information
+        similarity_score: Optional similarity score from vector search
+        
+    Returns:
+        A formatted prompt string for the LLM
+    """
+    
+    return f"""
+Hello, I am a music library assistant. I need to explain why this song matches the user's query.
+
+Song Information:
+- ID: {song.id}
+- Title: {song.name}
+- Artist(s): {', '.join(song.artists)}
+- Album: {song.album}
+- Song Metadata: {song.song_metadata if song.song_metadata else 'N/A'}
+- Lyrics: {song.lyrics if song.lyrics else 'N/A'}
+
+User's Query: {user_query}
+
+Provide a CONCISE, specific explanation (1 sentence) of why this song matches the user's query.
+
+Consider:
+- Lyrical content and themes that match the query
+- Musical style and genre (if mentioned in metadata)
+- Emotional tone that aligns with the query  
+- Specific phrases or concepts in the lyrics that relate to the query
+- Cultural or historical significance that connects to the query
+
+IMPORTANT: Be concise but specific. Focus on the most relevant connection between the song and the query.
+
+Return your explanation in this exact format:
+<reason>your specific explanation here</reason>
+"""
+
+def decode_individual_song_reasoning(response: str) -> str:
+    """
+    Decode the assistant response to extract individual song reasoning.
+    
+    Returns:
+        The reasoning string, or a fallback message if parsing fails
+    """
+    lines = response.split("\n")
+    
+    for line in lines:
+        line = line.strip()
+        if line.startswith("<reason>") and line.endswith("</reason>"):
+            return line.split("<reason>")[1].split("</reason>")[0]
+    
+    # Fallback: return the first non-empty line if parsing fails
+    for line in lines:
+        line = line.strip()
+        if line:
+            return line
+    
+    return "Matches the query based on semantic similarity"
