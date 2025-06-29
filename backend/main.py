@@ -467,6 +467,7 @@ async def spotify_search(
                 'instant_output_tokens': instant_token_usage.get('total_output_tokens', 0),
                 'vector_search': search_token_usage.get('vector_search', False),
                 'embedding_tokens': search_token_usage.get('embedding_tokens', {}),
+                'reasoning_tokens': search_token_usage.get('reasoning_tokens', {}),
                 'fallback_llm_search': search_token_usage.get('fallback_llm_search', False),
                 'llm_search_tokens': search_token_usage.get('llm_search_tokens', {}),
                 'vector_search_failed': search_token_usage.get('vector_search_failed', False),

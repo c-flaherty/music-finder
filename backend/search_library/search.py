@@ -1,10 +1,12 @@
-from .prompts import get_basic_query, decode_assistant_response
+from .prompts import get_basic_query, decode_assistant_response, get_vector_search_reasoning_query, get_individual_song_reasoning_query, decode_individual_song_reasoning
 from .types import Song
 from .clients import LLMClient, TextPrompt
 import numpy as np
 from openai import OpenAI
 from supabase import create_client, Client
 import os
+import concurrent.futures
+from typing import Tuple
 
 def search_library(client: LLMClient, library: list[Song], user_query: str, n: int = 3, chunk_size: int = 1000, verbose: bool = False) -> tuple[list[Song], dict]:
     """
@@ -149,17 +151,85 @@ def vector_search_library(user_query: str, n: int = 10, match_threshold: float =
                 song_metadata=db_song.get('song_metadata', ''),
                 embedding=db_song.get('embedding', [])
             )
-            # Add reasoning for vector search
-            song.reasoning = f"Vector similarity match (similarity score based on semantic content)"
             songs.append(song)
+        
+        # Generate specific reasoning for each matched song using LLM in concurrent threads
+        reasoning_token_usage = {'input_tokens': 0, 'output_tokens': 0}
+        cleaned_reasoning_tokens = {'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0}
+        
+        if songs:
+            if verbose:
+                print(f"Generating specific reasoning for {len(songs)} matched songs using {min(10, len(songs))} concurrent threads...")
+            
+            try:
+                # Prepare data for concurrent processing
+                song_data = []
+                for i, song in enumerate(songs):
+                    similarity_score = response.data[i].get('similarity', None)
+                    song_data.append((song, user_query, similarity_score, verbose))
+                
+                # Use ThreadPoolExecutor with max 10 workers for concurrent reasoning generation
+                with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                    # Submit all reasoning generation tasks
+                    future_to_song = {
+                        executor.submit(generate_individual_song_reasoning, song_info[0], song_info[1], song_info[2], song_info[3]): i 
+                        for i, song_info in enumerate(song_data)
+                    }
+                    
+                    # Collect results as they complete
+                    reasoned_songs = [None] * len(songs)  # Maintain original order
+                    total_reasoning_tokens = {'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0}
+                    
+                    for future in concurrent.futures.as_completed(future_to_song):
+                        song_index = future_to_song[future]
+                        try:
+                            song_with_reasoning, token_usage = future.result()
+                            reasoned_songs[song_index] = song_with_reasoning
+                            
+                            # Aggregate token usage
+                            total_reasoning_tokens['input_tokens'] += token_usage.get('input_tokens', 0)
+                            total_reasoning_tokens['output_tokens'] += token_usage.get('output_tokens', 0)
+                            total_reasoning_tokens['total_tokens'] += token_usage.get('total_tokens', 0)
+                            
+                            if verbose:
+                                print(f"Completed reasoning for: {song_with_reasoning.name}")
+                                
+                        except Exception as e:
+                            if verbose:
+                                print(f"[WARNING] Failed to generate reasoning for song at index {song_index}: {e}")
+                            # Use original song with fallback reasoning
+                            original_song = song_data[song_index][0]
+                            similarity_score = song_data[song_index][2]
+                            fallback_reason = f"Vector similarity match based on semantic content"
+                            if similarity_score is not None:
+                                fallback_reason += f" (similarity: {similarity_score:.3f})"
+                            original_song.reasoning = fallback_reason
+                            reasoned_songs[song_index] = original_song
+                
+                # Update songs list with reasoned songs (maintaining order)
+                songs = [song for song in reasoned_songs if song is not None]
+                cleaned_reasoning_tokens = total_reasoning_tokens
+                
+                if verbose:
+                    print(f"Successfully generated reasoning for {len(songs)} songs using concurrent processing")
+                    for i, song in enumerate(songs):
+                        print(f"Song {i+1}: {song.name} - {song.reasoning}")
+                        
+            except Exception as e:
+                print(f"[WARNING] Failed to generate specific reasoning with concurrent processing: {e}")
+                # Fallback to basic reasoning with similarity scores
+                for i, song in enumerate(songs):
+                    similarity_score = response.data[i].get('similarity', 'N/A')
+                    song.reasoning = f"Vector similarity match based on semantic content (similarity: {similarity_score:.3f})" if isinstance(similarity_score, (int, float)) else "Vector similarity match based on semantic content"
         
         # Token usage summary
         token_usage = {
-            'total_input_tokens': embedding_token_usage.get('input_tokens', 0),
-            'total_output_tokens': embedding_token_usage.get('output_tokens', 0),
-            'total_requests': 1,  # Only the embedding generation request
+            'total_input_tokens': embedding_token_usage.get('input_tokens', 0) + cleaned_reasoning_tokens.get('input_tokens', 0),
+            'total_output_tokens': embedding_token_usage.get('output_tokens', 0) + cleaned_reasoning_tokens.get('output_tokens', 0),
+            'total_requests': 1 + (1 if cleaned_reasoning_tokens.get('input_tokens', 0) > 0 else 0),  # Embedding + reasoning (if generated)
             'vector_search': True,
-            'embedding_tokens': embedding_token_usage
+            'embedding_tokens': embedding_token_usage,
+            'reasoning_tokens': cleaned_reasoning_tokens
         }
         
         if verbose:
@@ -314,5 +384,73 @@ def create_song_embedding(song: Song, openai_client: OpenAI = None, model: str =
     embedding = response.data[0].embedding
     
     return embedding
+
+def generate_individual_song_reasoning(song: Song, user_query: str, similarity_score: float = None, verbose: bool = False) -> Tuple[Song, dict]:
+    """
+    Generate reasoning for why a single song matches the user's query.
+    
+    Args:
+        song: The song to generate reasoning for
+        user_query: The user's search query
+        similarity_score: Optional similarity score from vector search
+        verbose: Whether to print verbose output
+        
+    Returns:
+        A tuple of (song with reasoning attached, token usage)
+    """
+    try:
+        # Import here to avoid circular imports
+        from .clients import get_client, TextPrompt
+        
+        llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
+        
+        # Generate prompt for this specific song
+        reasoning_prompt = get_individual_song_reasoning_query(user_query, song, similarity_score)
+        
+        if verbose:
+            print(f"Generating reasoning for song: {song.name} by {', '.join(song.artists)}")
+        
+        # Generate reasoning
+        response_tuple = llm_client.generate(
+            [[TextPrompt(text=reasoning_prompt)]],
+            max_tokens=200  # Reduced since we only need 1-2 sentences
+        )
+        
+        response_blocks = response_tuple[0]
+        reasoning_text = response_blocks[0].text
+        token_usage = response_tuple[1] if len(response_tuple) > 1 else {}
+        
+        # Decode the reasoning
+        reason = decode_individual_song_reasoning(reasoning_text)
+        
+        # Add similarity score to reasoning if available
+        if similarity_score is not None:
+            song.reasoning = f"{reason} (similarity: {similarity_score:.3f})"
+        else:
+            song.reasoning = reason
+            
+        # Clean up token usage
+        cleaned_token_usage = {
+            'input_tokens': token_usage.get('input_tokens', 0),
+            'output_tokens': token_usage.get('output_tokens', 0),
+            'total_tokens': token_usage.get('input_tokens', 0) + token_usage.get('output_tokens', 0)
+        }
+        
+        if verbose:
+            print(f"Generated reasoning for {song.name}: {reason}")
+        
+        return song, cleaned_token_usage
+        
+    except Exception as e:
+        if verbose:
+            print(f"[WARNING] Failed to generate reasoning for {song.name}: {e}")
+        
+        # Fallback reasoning
+        fallback_reason = f"Vector similarity match based on semantic content"
+        if similarity_score is not None:
+            fallback_reason += f" (similarity: {similarity_score:.3f})"
+        song.reasoning = fallback_reason
+        
+        return song, {'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0, 'error': str(e)}
     
     
