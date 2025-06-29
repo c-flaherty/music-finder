@@ -58,7 +58,7 @@ export function CompressedHeader({
         {/* Compressed Search Bar - Centered */}
         <form onSubmit={onSubmit} className="flex-1 flex justify-center">
           <div className="w-full max-w-2xl">
-          <div className="flex items-center bg-white border border-[#DDCDA8] rounded-full shadow-sm px-4 py-2 focus-within:ring-2 focus-within:ring-[#F6A23B] transition-all">
+          <div className="flex items-center bg-white border border-[#DDCDA8] rounded-2xl shadow-sm px-4 py-2 focus-within:ring-2 focus-within:ring-[#F6A23B] transition-all">
             <input
               ref={inputRef}
               type="text"
