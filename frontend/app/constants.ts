@@ -10,10 +10,6 @@ export const chatMessages = [
 
 export const placeholderTexts = [
 "that song about a roof in New York?",
-"the one that goes yeah yeah yeah",
-"song with the guitar solo",
-"early 2000s rock song",
-"that catchy chorus from TikTok",
-"the song from that movie",
-"upbeat song with drums"
+"female singer, goes yeah yeah yeah",
+"pop punk about someone's mom",
 ];
