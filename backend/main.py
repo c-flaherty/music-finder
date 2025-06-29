@@ -48,6 +48,65 @@ from utils import (
     SKIP_SUPABASE_CACHE
 )
 
+def update_users_songs_join_table(access_token, raw_songs: list[RawSong]):
+    """Update the users_songs join table with new songs for the user"""
+    try:
+        # Get user ID from Spotify API
+        user_response = requests.get(
+            'https://api.spotify.com/v1/me',
+            headers={
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type': 'application/json'
+            }
+        )
+        
+        if not user_response.ok:
+            print(f"[update_users_songs_join_table] Failed to get user info: {user_response.status_code}")
+            return
+            
+        user_data = user_response.json()
+        user_id = user_data.get('id')
+        
+        if not user_id:
+            print(f"[update_users_songs_join_table] No user ID found")
+            return
+            
+        print(f"[update_users_songs_join_table] Processing songs for user: {user_id}")
+        
+        # Initialize Supabase client
+        supabase: Client = create_client(supabase_url, supabase_service_key)
+        
+        # Get existing song IDs for this user from users_songs table
+        existing_songs_response = supabase.table('users_songs').select('song_id').eq('user_id', user_id).execute()
+        existing_song_ids = set()
+        if existing_songs_response.data:
+            existing_song_ids = {song['song_id'] for song in existing_songs_response.data}
+            
+        print(f"[update_users_songs_join_table] Found {len(existing_song_ids)} existing songs for user")
+        
+        # Find new songs that aren't in the existing list
+        new_songs = []
+        for raw_song in raw_songs:
+            song_id = raw_song.id
+            if song_id and song_id not in existing_song_ids:
+                new_songs.append({
+                    'user_id': user_id,
+                    'song_id': song_id
+                })
+                
+        print(f"[update_users_songs_join_table] Found {len(new_songs)} new songs to add")
+        
+        # Insert new songs into users_songs table
+        if new_songs:
+            insert_response = supabase.table('users_songs').insert(new_songs).execute()
+            print(f"[update_users_songs_join_table] Successfully inserted {len(new_songs)} new songs")
+        else:
+            print(f"[update_users_songs_join_table] No new songs to insert")
+            
+    except Exception as e:
+        print(f"[update_users_songs_join_table] Error: {e}")
+        # Don't raise exception - this is not critical for the main flow
+
 # Environment variables
 anthropic_key = os.getenv('ANTHROPIC_API_KEY')
 openai_key = os.getenv('OPENAI_API_KEY')
@@ -218,6 +277,123 @@ async def get_playlist(playlist_id: str, authorization: str = Header(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/login-or-create-user")
+async def login_or_create_user(authorization: str = Header(...), refresh_token: Union[str, None] = Header(None, alias="refresh-token")):
+    """Get user info from Spotify API and save/update user in Supabase"""
+    if not authorization or not authorization.startswith('Bearer '):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    access_token = authorization.split(' ')[1]
+
+    try:
+        # Get user info from Spotify API
+        response = requests.get(
+            'https://api.spotify.com/v1/me',
+            headers={
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type': 'application/json'
+            }
+        )
+
+        # Handle token refresh if needed
+        if response.status_code == 401 and refresh_token:
+            try:
+                new_token = refresh_access_token(refresh_token)
+                response = requests.get(
+                    'https://api.spotify.com/v1/me',
+                    headers={
+                        'Authorization': f'Bearer {new_token}',
+                        'Content-Type': 'application/json'
+                    }
+                )
+            except Exception as e:
+                raise HTTPException(status_code=401, detail="Failed to refresh access token")
+
+        if not response.ok:
+            raise HTTPException(status_code=response.status_code, detail="Failed to fetch user profile")
+
+        user_data = response.json()
+        
+        # Initialize Supabase client for vault operations
+        if not supabase_url or not supabase_service_key:
+            raise HTTPException(
+                status_code=500, 
+                detail={'error': 'Missing Supabase configuration'}
+            )
+        
+        supabase: Client = create_client(supabase_url, supabase_service_key)
+
+        # Check if user already exists - early exit if they do
+        existing_user_response = supabase.table('users').select('*').eq('id', user_data.get('id')).execute()
+        if existing_user_response.data and len(existing_user_response.data) > 0:
+            existing_user = existing_user_response.data[0]
+            print(f"[login-or-create-user] User already exists: {existing_user.get('id')}")
+            return {
+                'success': True,
+                'user_id': existing_user.get('id'),
+                'message': 'User already exists - logged in successfully',
+                'user': existing_user,
+                'timestamp': datetime.now().isoformat()
+            }
+        
+        # Store refresh token in Supabase Vault if provided
+        vault_secret_id = None
+        if refresh_token:
+            try:
+                # Use direct SQL to call vault.create_secret function
+                secret_name = f"spotify_refresh_token_{user_data.get('id')}"
+                secret_description = f"Spotify refresh token for user {user_data.get('id')}"
+                
+                # Call our wrapper function that calls vault.create_secret
+                vault_response = supabase.rpc('create_vault_secret', {
+                    'secret': refresh_token,
+                    'name': secret_name,
+                    'description': secret_description
+                }).execute()
+                print(f"[login-or-create-user] Vault response: {vault_response.data}")
+                vault_secret_id = vault_response.data if vault_response.data else None
+            except Exception as vault_error:
+                print(f"Warning: Failed to store refresh token in vault: {vault_error}")
+                # Continue without vault storage - this is not a critical failure
+        else:
+            print(f"Warning: No refresh token provided")
+        
+        # Extract user information
+        user_info = {
+            'id': user_data.get('id'),
+            'display_name': user_data.get('display_name'),
+            'email': user_data.get('email'),
+            'country': user_data.get('country'),
+            'vault_secret_id': vault_secret_id,
+        }
+        
+        try:
+            # Try to insert user (upsert to handle existing users)
+            response = supabase.table('users').upsert(user_info, on_conflict='id').execute()
+            saved_user = response.data[0] if response.data else user_info
+            
+            return {
+                'success': True,
+                'user_id': user_info.get('id'),
+                'message': 'User successfully logged in/created',
+                'user': saved_user,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+        except Exception as supabase_error:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    'error': 'Database error',
+                    'details': str(supabase_error)
+                }
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/test_ping")
 async def test_ping():
     async def event_stream():
@@ -353,6 +529,9 @@ async def spotify_search(
             # Emit initial progress
             yield f"data: {json.dumps({'type': 'progress', 'processed': 0, 'total': total_progress_steps, 'message': f'Cannoli is listening to your music...'})}\n\n"
             await asyncio.sleep(0.1)
+
+            # get user id
+            update_users_songs_join_table(updated_access_token, raw_songs)
 
             # Process unprocessed songs with progress updates
             enriched_songs = []

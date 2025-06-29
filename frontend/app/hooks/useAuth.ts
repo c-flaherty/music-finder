@@ -35,6 +35,7 @@ export const useAuth = () => {
       const q = params.get('q');
 
       if (accessToken) {
+        // Store tokens first
         localStorage.setItem('spotify_access_token', accessToken);
         if (refreshToken) {
           localStorage.setItem('spotify_refresh_token', refreshToken);
@@ -43,6 +44,43 @@ export const useAuth = () => {
           const expiresAt = Date.now() + (parseInt(expiresIn) * 1000);
           localStorage.setItem('spotify_token_expires_at', expiresAt.toString());
         }
+
+        // Call backend to create/update user in database
+        const createOrUpdateUser = async () => {
+          try {
+            const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8001';
+            const headers: Record<string, string> = {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            };
+            
+            if (refreshToken) {
+              headers['refresh-token'] = refreshToken;
+            }
+
+            const response = await fetch(`${backendUrl}/api/login-or-create-user`, {
+              method: 'POST',
+              headers,
+            });
+
+            if (!response.ok) {
+              console.error('[AUTH] Failed to create/update user:', response.status, response.statusText);
+              // Don't block authentication if user creation fails
+              // The user can still use the app, just without database tracking
+            } else {
+              const userData = await response.json();
+              console.log('[AUTH] User created/updated successfully:', userData);
+            }
+          } catch (error) {
+            console.error('[AUTH] Error creating/updating user:', error);
+            // Don't block authentication if user creation fails
+          }
+        };
+
+        // Call the user creation function
+        createOrUpdateUser();
+
+        // Set authenticated state
         setIsAuthenticated(true);
 
         // Clean up URL to remove tokens and start_search (but keep q)
