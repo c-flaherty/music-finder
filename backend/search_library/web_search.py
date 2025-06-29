@@ -1,15 +1,16 @@
+
 from __future__ import annotations
 
 import os
 import random
 import time
-from concurrent.futures import ProcessPoolExecutor, as_completed
+import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional
 
 import requests
 import trafilatura
 from dotenv import load_dotenv
-from googleapiclient.discovery import build
 from trafilatura.meta import reset_caches
 
 # --------------------------------------------------------------------------- #
@@ -19,12 +20,11 @@ load_dotenv(
     dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env.local")
 )
 
-_GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-_GOOGLE_CSE_ID = os.getenv("GOOGLE_CSE_ID")
-if not _GOOGLE_API_KEY or not _GOOGLE_CSE_ID:
-    raise ValueError("GOOGLE_API_KEY and GOOGLE_CSE_ID env vars must be set")
+_BRAVE_API_KEY: str | None = os.getenv("BRAVE_API_KEY")
+if not _BRAVE_API_KEY:
+    raise ValueError("BRAVE_API_KEY env var must be set (see .env.local)")
 
-_SERVICE = build("customsearch", "v1", developerKey=_GOOGLE_API_KEY, cache_discovery=False)
+_BRAVE_ENDPOINT = "https://api.search.brave.com/res/v1/web/search"
 
 _DEFAULT_HEADERS: dict[str, str] = {
     "User-Agent": (
@@ -33,107 +33,132 @@ _DEFAULT_HEADERS: dict[str, str] = {
         "Chrome/120.0.0.0 Safari/537.36"
     ),
     "Accept-Encoding": "gzip",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.5",
+    "Accept": "application/json",
 }
 
-# Single pooled HTTPS session (one per *process*)
+# Single pooled HTTPS session (shared by all threads)
 _TLS = requests.Session()
 _TLS.headers.update(_DEFAULT_HEADERS)
+_TLS.headers["X-Subscription-Token"] = _BRAVE_API_KEY
 _TLS.mount(
     "https://",
-    requests.adapters.HTTPAdapter(pool_maxsize=10, pool_block=False),
+    requests.adapters.HTTPAdapter(pool_maxsize=20, pool_block=False),
 )
 
-
 # --------------------------------------------------------------------------- #
-#  Public helpers – same API
+#  Public helpers – same *interface*
 # --------------------------------------------------------------------------- #
 
 def get_google_links(query: str, n: int = 3) -> List[str]:
+    """Return *n* result URLs for *query* via Brave Search.
+
+    Retains the original name for backwards compatibility.
+    """
     t0 = time.time()
-    resp = (
-        _SERVICE.cse()
-        .list(q=query, cx=_GOOGLE_CSE_ID, num=n, fields="items(link)")
-        .execute()
-    )
-    print(f"[PROFILE] get_google_links: {time.time() - t0:.3f}s")
-    return [it["link"] for it in resp.get("items", [])]
+
+    params = {
+        "q": query,
+        "count": n,
+        # Reasonable, explicit defaults – feel free to expose as kwargs
+        "country": "US",
+        "search_lang": "en",
+        "result_filter": "web",  # only canonical web results
+    }
+
+    r = _TLS.get(_BRAVE_ENDPOINT, params=params, timeout=10)
+    r.raise_for_status()
+    data: dict = r.json()
+
+    links: List[str] = [
+        item.get("url")
+        for item in data.get("web", {}).get("results", [])
+        if item.get("url")
+    ]
+
+    print(f"[PROFILE] get_google_links (Brave): {time.time() - t0:.3f}s")
+    return links[:n]
 
 
 # --------------------------------------------------------------------------- #
-#  Core fetch + extract logic (runs inside worker processes)
+#  Core fetch + extract logic
 # --------------------------------------------------------------------------- #
 
 def _fetch_clean_text(url: str, timeout: int = 10, max_retries: int = 2) -> Optional[str]:
-    """Download *url* and return the main text (or None on failure)."""
+    """Download *url* and return the main article text (or None on failure)."""
     for attempt in range(max_retries):
         try:
-            r = _TLS.get(url, timeout=timeout, allow_redirects=True)
-            r.raise_for_status()
+            resp = _TLS.get(url, timeout=timeout, allow_redirects=True)
+            resp.raise_for_status()
 
-            if not r.text or len(r.text) < 10:
+            if not resp.text or len(resp.text) < 10:
                 raise ValueError("empty response")
 
             txt = trafilatura.extract(
-                r.text, include_comments=False, no_fallback=True, url=url
+                resp.text, include_comments=False, no_fallback=True, url=url
             )
             return txt
 
-        except Exception as e:
+        except Exception as exc:
             if attempt == max_retries - 1:
-                print(f"[warn] fetch failed {url[:60]}…: {e}")
+                print(f"[warn] fetch failed {url[:60]}…: {exc}")
                 return None
-            sleep_for = 1.5 * (attempt + 1) + random.random()
+            backoff = 1.5 * (attempt + 1) + random.random()
             print(
-                f"[PROFILE] retry {attempt + 1}/{max_retries - 1}: {type(e).__name__} for {url[:60]} – sleeping {sleep_for:.1f}s"
+                f"[PROFILE] retry {attempt + 1}/{max_retries - 1}: {type(exc).__name__} for {url[:60]} – sleeping {backoff:.1f}s"
             )
-            time.sleep(sleep_for)
+            time.sleep(backoff)
 
 
 # --------------------------------------------------------------------------- #
-#  Parallel wrapper – *process* pool
+#  Parallel wrapper – thread pool (I/O bound)
 # --------------------------------------------------------------------------- #
 
-def _parallel_fetch(urls: List[str], timeout: int = 10, max_retries: int = 2) -> List[Optional[str]]:
+def _parallel_fetch(
+    urls: List[str], timeout: int = 10, max_retries: int = 2
+) -> List[Optional[str]]:
     t0 = time.time()
-    out: List[Optional[str]] = [None] * len(urls)
+    results: List[Optional[str]] = [None] * len(urls)
 
-    # Spawn a pool only if there is real work to do
+    if not urls:
+        return results
+
     if len(urls) == 1:
-        out[0] = _fetch_clean_text(urls[0], timeout, max_retries)
+        results[0] = _fetch_clean_text(urls[0], timeout, max_retries)
     else:
-        max_workers = min(4, os.cpu_count() or 1)
-        with ProcessPoolExecutor(max_workers=max_workers) as pool:
-            future_to_idx = {
+        max_workers = min(16, len(urls))  # generous for I/O but avoids oversubscription
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            fut_to_idx = {
                 pool.submit(_fetch_clean_text, url, timeout, max_retries): i
                 for i, url in enumerate(urls)
             }
-            for fut in as_completed(future_to_idx):
-                idx = future_to_idx[fut]
+            for fut in as_completed(fut_to_idx):
+                idx = fut_to_idx[fut]
                 try:
-                    out[idx] = fut.result()
-                except Exception as e:  # pragma: no‑cover – defensive guard
-                    print(f"[warn] worker crash on {urls[idx][:60]}: {e}")
+                    results[idx] = fut.result()
+                except Exception as exc:  # pragma: no‑cover – defensive guard
+                    print(f"[warn] worker crash on {urls[idx][:60]}: {exc}")
 
     print(f"[PROFILE] _parallel_fetch: {time.time() - t0:.3f}s for {len(urls)} URLs")
-    return out
+    return results
 
 
 # --------------------------------------------------------------------------- #
 #  High‑level helpers
 # --------------------------------------------------------------------------- #
 
-def search_internet(query: str, top_n: int = 5, timeout: int = 15, max_retries: int = 2) -> List[str]:
+def search_internet(
+    query: str, top_n: int = 5, timeout: int = 15, max_retries: int = 2
+) -> List[str]:
+    """Return list of plain‑text articles for *query* (best‑effort)."""
     t0 = time.time()
     links = get_google_links(query, n=top_n)
     texts = _parallel_fetch(links, timeout=timeout, max_retries=max_retries)
     reset_caches()  # keep libxml2 heap clean
-    result = [t for t in texts if t]
+    docs = [t for t in texts if t]
     print(
-        f"[PROFILE] search_internet: {time.time() - t0:.3f}s total (query: '{query}', found {len(result)} docs)"
+        f"[PROFILE] search_internet: {time.time() - t0:.3f}s total (query: '{query}', found {len(docs)} docs)"
     )
-    return result
+    return docs
 
 
 def search_internet_with_urls(
@@ -142,6 +167,7 @@ def search_internet_with_urls(
     timeout: int = 15,
     max_retries: int = 2,
 ) -> Dict[str, Optional[str]]:
+    """Return mapping url -> article_text (first 4k chars)."""
     t0 = time.time()
     links = get_google_links(query, n=top_n)
     texts = _parallel_fetch(links, timeout=timeout, max_retries=max_retries)
