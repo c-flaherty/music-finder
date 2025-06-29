@@ -3,6 +3,8 @@ from .types import Song
 from .clients import LLMClient, TextPrompt
 import numpy as np
 from openai import OpenAI
+from supabase import create_client, Client
+import os
 
 def search_library(client: LLMClient, library: list[Song], user_query: str, n: int = 3, chunk_size: int = 1000, verbose: bool = False) -> tuple[list[Song], dict]:
     """
@@ -89,6 +91,141 @@ def search_library(client: LLMClient, library: list[Song], user_query: str, n: i
         return final_results, total_token_usage
         
     return filtered_songs, total_token_usage
+
+def vector_search_library(user_query: str, n: int = 10, match_threshold: float = 0.5, verbose: bool = False) -> tuple[list[Song], dict]:
+    """
+    Search the song library using vector similarity search.
+
+    Args:
+        user_query: The query to search for
+        n: The number of songs to return
+        match_threshold: The minimum similarity threshold (0.0 to 1.0)
+        verbose: Whether to print verbose output
+
+    Returns:
+        A tuple of (songs that match the user's query, token usage statistics)
+    """
+    # Initialize Supabase client
+    supabase_url = os.getenv('SUPABASE_URL')
+    supabase_service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+    
+    if not supabase_url or not supabase_service_key:
+        raise Exception("Missing Supabase configuration")
+    
+    supabase: Client = create_client(supabase_url, supabase_service_key)
+    
+    # Generate embedding for the user query
+    query_embedding, embedding_token_usage = create_query_embedding(user_query, verbose=verbose)
+    
+    if verbose:
+        print(f"Generated query embedding with {len(query_embedding)} dimensions")
+        print(f"Using match threshold: {match_threshold}")
+        print(f"Requesting {n} matches")
+    
+    try:
+        # Call the Supabase function to find similar songs
+        response = supabase.rpc('match_songs', {
+            'query_embedding': query_embedding,
+            'match_threshold': match_threshold,
+            'match_count': n
+        }).execute()
+        
+        if verbose:
+            print(f"Found {len(response.data)} matching songs")
+        
+        # Convert database results to Song objects
+        songs = []
+        for db_song in response.data:
+            # Convert comma-delimited artists string back to list
+            artists_list = [artist.strip() for artist in db_song['artists'].split(',')]
+            
+            song = Song(
+                id=db_song['id'],
+                name=db_song['name'],
+                artists=artists_list,
+                album=db_song['album'],
+                song_link=db_song['song_link'],
+                lyrics=db_song.get('lyrics', ''),
+                song_metadata=db_song.get('song_metadata', ''),
+                embedding=db_song.get('embedding', [])
+            )
+            # Add reasoning for vector search
+            song.reasoning = f"Vector similarity match (similarity score based on semantic content)"
+            songs.append(song)
+        
+        # Token usage summary
+        token_usage = {
+            'total_input_tokens': embedding_token_usage.get('input_tokens', 0),
+            'total_output_tokens': embedding_token_usage.get('output_tokens', 0),
+            'total_requests': 1,  # Only the embedding generation request
+            'vector_search': True,
+            'embedding_tokens': embedding_token_usage
+        }
+        
+        if verbose:
+            print(f"Vector search completed. Found {len(songs)} songs.")
+            print(f"Token usage: {token_usage}")
+        
+        return songs, token_usage
+        
+    except Exception as e:
+        print(f"Error in vector search: {e}")
+        # Return empty results with token usage for embedding generation
+        return [], {
+            'total_input_tokens': embedding_token_usage.get('input_tokens', 0),
+            'total_output_tokens': embedding_token_usage.get('output_tokens', 0),
+            'total_requests': 1,
+            'vector_search': True,
+            'error': str(e)
+        }
+
+def create_query_embedding(query: str, openai_client: OpenAI = None, model: str = "text-embedding-ada-002", verbose: bool = False) -> tuple[list[float], dict]:
+    """
+    Create an embedding for a search query using OpenAI's embedding API.
+    
+    Args:
+        query: The search query to create an embedding for
+        openai_client: Optional OpenAI client instance. If None, creates a new one.
+        model: The embedding model to use (default: text-embedding-ada-002)
+        verbose: Whether to print verbose output
+    
+    Returns:
+        A tuple of (embedding vector, token usage)
+    """
+    if openai_client is None:
+        openai_client = OpenAI()
+    
+    if verbose:
+        print(f"Creating embedding for query: '{query[:100]}...'")
+    
+    try:
+        # Create embedding using OpenAI API
+        response = openai_client.embeddings.create(
+            model=model,
+            input=query,
+            encoding_format="float"
+        )
+        
+        # Extract the embedding vector from the response
+        embedding = response.data[0].embedding
+        
+        # Extract token usage
+        token_usage = {
+            'input_tokens': response.usage.prompt_tokens if hasattr(response, 'usage') else 0,
+            'output_tokens': 0,  # Embedding endpoints don't have output tokens
+            'total_tokens': response.usage.total_tokens if hasattr(response, 'usage') else 0
+        }
+        
+        if verbose:
+            print(f"Successfully created embedding with {len(embedding)} dimensions")
+            print(f"Token usage: {token_usage}")
+        
+        return embedding, token_usage
+        
+    except Exception as e:
+        print(f"Error creating query embedding: {e}")
+        # Return empty embedding and token usage on error
+        return [], {'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0, 'error': str(e)}
 
 def recursive_search(client: LLMClient, sublibrary: list[Song], user_query: str, n: int = 3, verbose: bool = False) -> tuple[list[Song], dict]:
     prompt = get_basic_query(sublibrary, user_query, n)

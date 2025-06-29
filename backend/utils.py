@@ -14,7 +14,7 @@ backend_dir = os.path.dirname(current_dir)
 search_lib_dir = os.path.join(backend_dir, 'search_library')
 sys.path.insert(0, backend_dir)
 
-from search_library.search import search_library, create_song_embedding
+from search_library.search import search_library, create_song_embedding, vector_search_library
 from search_library.types import Song as SearchSong, RawSong
 from search_library.clients import get_client
 from search_library.prompts import get_song_metadata_query

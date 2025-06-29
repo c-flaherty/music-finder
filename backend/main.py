@@ -25,7 +25,7 @@ backend_dir = os.path.dirname(current_dir)
 search_lib_dir = os.path.join(backend_dir, 'search_library')
 sys.path.insert(0, backend_dir)
 
-from search_library.search import search_library
+from search_library.search import search_library, vector_search_library
 from search_library.types import Song as SearchSong, RawSong
 from search_library.clients import get_client
 from search_library.prompts import get_song_metadata_query
@@ -402,22 +402,55 @@ async def spotify_search(
             yield f"data: {json.dumps({'type': 'status', 'message': 'Cannoli is searching through your music...'})}\n\n"
             await asyncio.sleep(0.1)
             
-            # Search through the enriched songs using LLM
-            llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
+            # Search through the songs using vector similarity search
             if SKIP_EXPENSIVE_STEPS:
                 relevant_songs, search_token_usage = copy.deepcopy(all_enriched_songs[:10]), {}
                 for song in relevant_songs:
                     song.reasoning = f"this is why I think {song.name} by {', '.join(song.artists)} is relevant to the query"
                 time.sleep(3)
             else:
-                relevant_songs, search_token_usage = search_library(llm_client, all_enriched_songs, query, n=10, chunk_size=100, verbose=True)
+                # Use vector search instead of LLM search
+                try:
+                    relevant_songs, search_token_usage = vector_search_library(
+                        user_query=query, 
+                        n=10, 
+                        match_threshold=0.5,  # Adjust this threshold as needed
+                        verbose=True
+                    )
+                    
+                    # If vector search returns no results, fallback to LLM search
+                    if not relevant_songs and all_enriched_songs:
+                        print(f"[spotify_search] Vector search returned no results, falling back to LLM search")
+                        yield f"data: {json.dumps({'type': 'status', 'message': 'Vector search found no matches, trying LLM search...'})}\n\n"
+                        await asyncio.sleep(0.1)
+                        
+                        llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
+                        relevant_songs, llm_search_token_usage = search_library(llm_client, all_enriched_songs, query, n=10, chunk_size=100, verbose=True)
+                        
+                        # Combine token usage from both vector and LLM search
+                        search_token_usage['total_input_tokens'] += llm_search_token_usage.get('total_input_tokens', 0)
+                        search_token_usage['total_output_tokens'] += llm_search_token_usage.get('total_output_tokens', 0)
+                        search_token_usage['total_requests'] += llm_search_token_usage.get('total_requests', 0)
+                        search_token_usage['fallback_llm_search'] = True
+                        search_token_usage['llm_search_tokens'] = llm_search_token_usage
+                        
+                except Exception as e:
+                    print(f"[spotify_search] Vector search failed: {e}, falling back to LLM search")
+                    yield f"data: {json.dumps({'type': 'status', 'message': 'Vector search failed, using LLM search...'})}\n\n"
+                    await asyncio.sleep(0.1)
+                    
+                    # Fallback to original LLM search
+                    llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
+                    relevant_songs, search_token_usage = search_library(llm_client, all_enriched_songs, query, n=10, chunk_size=100, verbose=True)
+                    search_token_usage['vector_search_failed'] = True
+                    search_token_usage['error'] = str(e)
 
             print(f"[spotify_search] Done searching")
             
             yield f"data: {json.dumps({'type': 'status', 'message': 'Processing results...'})}\n\n"
             await asyncio.sleep(0.1)
             
-            # Combine token usage from both processes (including instant search tokens)
+            # Combine token usage from all processes (including instant search tokens)
             combined_token_usage = {
                 'total_input_tokens': search_token_usage.get('total_input_tokens', 0) + total_enrichment_tokens.get('total_input_tokens', 0) + instant_token_usage.get('total_input_tokens', 0),
                 'total_output_tokens': search_token_usage.get('total_output_tokens', 0) + total_enrichment_tokens.get('total_output_tokens', 0) + instant_token_usage.get('total_output_tokens', 0),
@@ -431,7 +464,13 @@ async def spotify_search(
                 'search_input_tokens': search_token_usage.get('total_input_tokens', 0),
                 'search_output_tokens': search_token_usage.get('total_output_tokens', 0),
                 'instant_input_tokens': instant_token_usage.get('total_input_tokens', 0),
-                'instant_output_tokens': instant_token_usage.get('total_output_tokens', 0)
+                'instant_output_tokens': instant_token_usage.get('total_output_tokens', 0),
+                'vector_search': search_token_usage.get('vector_search', False),
+                'embedding_tokens': search_token_usage.get('embedding_tokens', {}),
+                'fallback_llm_search': search_token_usage.get('fallback_llm_search', False),
+                'llm_search_tokens': search_token_usage.get('llm_search_tokens', {}),
+                'vector_search_failed': search_token_usage.get('vector_search_failed', False),
+                'error': search_token_usage.get('error', '')
             }
             
             print(f"[spotify_search] Token usage summary:")
@@ -453,7 +492,7 @@ async def spotify_search(
             # Emit final results
             final_data = {
                 'type': 'results',
-                'results': [asdict(song) for song in relevant_songs],
+                'results': result_dicts,
                 'token_usage': combined_token_usage
             }
             yield f"data: {json.dumps(final_data)}\n\n"
