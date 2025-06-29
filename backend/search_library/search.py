@@ -432,7 +432,7 @@ def generate_individual_song_reasoning(song: Song, user_query: str, similarity_s
         # Import here to avoid circular imports
         from .clients import get_client, TextPrompt
         
-        llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
+        llm_client = get_client("openai-direct", model_name="gpt-4o")
         
         # Generate prompt for this specific song
         reasoning_prompt = get_individual_song_reasoning_query(user_query, song, similarity_score)

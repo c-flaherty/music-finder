@@ -138,8 +138,19 @@ Consider:
 
 IMPORTANT: Be concise but specific. Focus on the most relevant connection between the song and the query.
 
+Tips on the tone:
+- Keep your tone casual and conversational. Don't be too formal. Don't be too verbose.
+- Don't recite the song name or artist name in your explanation. The user already knows it.
+- If the query is just "patti", then an explanation for a song by Patti Smith should simply be "Matching first name".
+- Always use proper punctuation. In particular, use a period at the end of your explanation.
+
 Return your explanation in this exact format:
 <reason>your specific explanation here</reason>
+
+----
+HERE IS AN EXAMPLE OF AN EXPLANATION THAT IS TOO VERBOSE:
+The song "Suzanne" by Hope Sandoval & The Warm Inventions reflects themes of longing and personal connections, 
+evoking a similar emotional tone as works by artists like Patti Smith, making it resonate with listeners who appreciate introspective and emotionally rich music.
 """
 
 def decode_individual_song_reasoning(response: str) -> str:
