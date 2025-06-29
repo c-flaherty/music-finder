@@ -73,7 +73,7 @@ export function CompressedHeader({
               className={`px-3 md:px-4 py-1.5 rounded-xl font-semibold shadow transition-colors font-roobert cursor-pointer ${!search.trim() ? 'bg-gray-400 text-white' : 'bg-[#F6A23B] text-white hover:bg-[#D18A32] active:bg-[#D18A32]'}`}
               disabled={!search.trim() || isSearching}
             >
-              {isSearching ? 'Searching...' : 'Search'}
+              {isSearching ? 'Searching...' : 'Find Song'}
             </button>
           </div>
           </div>

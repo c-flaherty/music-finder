@@ -115,7 +115,7 @@ export function SearchForm({
             disabled={!search.trim()}
             ref={askButtonRef}
           >
-            {isSearching ? 'Searching...' : 'Find song'}
+            {isSearching ? 'Searching...' : 'Find Song'}
           </button>
         </div>
         {showAuthDropdown && !isAuthenticated && (
