@@ -1,8 +1,10 @@
 from .types import Song
 
-def get_basic_query(library: list[Song], user_query: str, n: int = 3) -> str:
+def get_basic_query(library: list[Song], user_query: str, n: int = 3, generate_song_reasoning: bool = False) -> str:
     song_str = "\n".join([str(song) for song in library])
-    return f"""
+
+    if generate_song_reasoning:
+        return f"""
 Hello, I am a music library assistant. I am here to help you find songs in my library.
 
 Here is the library:
@@ -32,26 +34,60 @@ Return the songs in the following format, ordered from most relevant to least re
 
 Example: If a song has ID "12345" in the library, use <song_id>12345</song_id>
 """
+    else:
+        return f"""
+Hello, I am a music library assistant. I am here to help you find songs in my library.
 
-def decode_assistant_response(response: str) -> list[tuple[str, str]]:
+Here is the library:
+{song_str}
+
+Here is the user's query:
+{user_query}
+
+Which {n} songs in the library best match the user's query?
+
+IMPORTANT: Search through the lyrics carefully for exact phrase matches. If the user is looking for a specific lyric, prioritize songs that contain that exact phrase or very close variations.
+
+Rank songs with direct lyric or title matches above those with only thematic or emotional relevance.
+If any song contains the exact phrase or a very close match to the user's query in its lyrics or title, list it first.
+
+CRITICAL: Use the EXACT song ID numbers from the library above. Do not make up IDs or use generic numbers.
+
+Return the songs in the following format, ordered from most relevant to least relevant:
+<song_id>EXACT_ID_FROM_LIBRARY</song_id>
+<song_id>EXACT_ID_FROM_LIBRARY</song_id>
+<song_id>EXACT_ID_FROM_LIBRARY</song_id>
+
+Example: If a song has ID "12345" in the library, use <song_id>12345</song_id>
+"""
+
+
+def decode_assistant_response(response: str, generate_song_reasoning: bool = False) -> list[tuple[str, str]]:
     """
     Decode the assistant response to extract song IDs and their reasoning.
     
     Returns:
         List of tuples containing (song_id, reasoning)
     """
-    song_reasons = []
-    lines = response.split("\n")
-    current_song_id = None
-    
-    for line in lines:
-        line = line.strip()
-        if line.startswith("<song_id>"):
-            current_song_id = line.split("<song_id>")[1].split("</song_id>")[0]
-        elif line.startswith("<reason>") and current_song_id:
-            reason = line.split("<reason>")[1].split("</reason>")[0]
-            song_reasons.append((current_song_id, reason))
-            current_song_id = None
+    if generate_song_reasoning:
+        song_reasons = []
+        lines = response.split("\n")
+        current_song_id = None
+        
+        for line in lines:
+            line = line.strip()
+            if line.startswith("<song_id>"):
+                current_song_id = line.split("<song_id>")[1].split("</song_id>")[0]
+                song_reasons.append((current_song_id, ""))
+    else:
+        song_reasons = []
+        lines = response.split("\n")
+        current_song_id = None
+        for line in lines:
+            line = line.strip()
+            if line.startswith("<song_id>"):
+                current_song_id = line.split("<song_id>")[1].split("</song_id>")[0]
+                song_reasons.append((current_song_id, ""))
     
     return song_reasons
 

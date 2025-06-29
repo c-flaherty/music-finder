@@ -25,7 +25,7 @@ backend_dir = os.path.dirname(current_dir)
 search_lib_dir = os.path.join(backend_dir, 'search_library')
 sys.path.insert(0, backend_dir)
 
-from search_library.search import search_library, vector_search_library
+from search_library.search import search_library, vector_search_library, generate_many_song_reasoning
 from search_library.types import Song as SearchSong, RawSong
 from search_library.clients import get_client
 from search_library.prompts import get_song_metadata_query
@@ -36,6 +36,7 @@ from instant_llm import instant_search
 
 # Import utility functions from utils.py
 from utils import (
+    ADD_RERANKER_TO_VECTOR_SEARCH,
     get_lyrics,
     get_song_metadata,  
     get_songs_from_playlists,
@@ -589,42 +590,49 @@ async def spotify_search(
                     song.reasoning = f"this is why I think {song.name} by {', '.join(song.artists)} is relevant to the query"
                 time.sleep(3)
             else:
-                # Use vector search instead of LLM search
-                try:
-                    relevant_songs, search_token_usage = vector_search_library(
-                        user_id=user_id,
-                        user_query=query, 
-                        n=10, 
-                        match_threshold=0.5,  # Adjust this threshold as needed
-                        verbose=True
-                    )
-                    
-                    # If vector search returns no results, fallback to LLM search
-                    # if not relevant_songs and all_enriched_songs:
-                    #     print(f"[spotify_search] Vector search returned no results, falling back to LLM search")
-                    #     yield f"data: {json.dumps({'type': 'status', 'message': 'Vector search found no matches, trying LLM search...'})}\n\n"
-                    #     await asyncio.sleep(0.1)
-                        
-                    #     llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
-                    #     relevant_songs, llm_search_token_usage = search_library(llm_client, all_enriched_songs, query, n=10, chunk_size=100, verbose=True)
-                        
-                    #     # Combine token usage from both vector and LLM search
-                    #     search_token_usage['total_input_tokens'] += llm_search_token_usage.get('total_input_tokens', 0)
-                    #     search_token_usage['total_output_tokens'] += llm_search_token_usage.get('total_output_tokens', 0)
-                    #     search_token_usage['total_requests'] += llm_search_token_usage.get('total_requests', 0)
-                    #     search_token_usage['fallback_llm_search'] = True
-                    #     search_token_usage['llm_search_tokens'] = llm_search_token_usage
-                        
-                except Exception as e:
-                    print(f"[spotify_search] Vector search failed: {e}, falling back to LLM search")
-                    yield f"data: {json.dumps({'type': 'status', 'message': 'Vector search failed, using LLM search...'})}\n\n"
-                    await asyncio.sleep(0.1)
-                    
-                    # Fallback to original LLM search
+                start_time = time.time()
+                relevant_songs, search_token_usage = vector_search_library(
+                    user_id=user_id,
+                    user_query=query, 
+                    n=20, 
+                    match_threshold=0.5,  # Adjust this threshold as needed
+                    generate_song_reasoning=False,
+                    verbose=True
+                )
+                end_time = time.time()
+                print(f"[spotify_search] Vector search result count: {len(relevant_songs)}, time taken: {end_time - start_time} seconds")
+                
+                # now run LLM search on the remaining songs
+                if ADD_RERANKER_TO_VECTOR_SEARCH:
                     llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
-                    relevant_songs, search_token_usage = search_library(llm_client, all_enriched_songs, query, n=10, chunk_size=100, verbose=True)
-                    search_token_usage['vector_search_failed'] = True
-                    search_token_usage['error'] = str(e)
+                    start_time = time.time()
+                    relevant_songs, llm_search_token_usage = search_library(llm_client, relevant_songs, query, n=10, chunk_size=100, generate_song_reasoning=False, verbose=True)
+                    end_time = time.time()
+                    print(f"[spotify_search] LLM reranker result count: {len(relevant_songs)}, time taken: {end_time - start_time} seconds")
+                    # Combine token usage from both vector and LLM search
+                    search_token_usage['total_input_tokens'] += llm_search_token_usage.get('total_input_tokens', 0)
+                    search_token_usage['total_output_tokens'] += llm_search_token_usage.get('total_output_tokens', 0)
+                    search_token_usage['total_requests'] += llm_search_token_usage.get('total_requests', 0)
+                    search_token_usage['fallback_llm_search'] = True
+                    search_token_usage['llm_search_tokens'] = llm_search_token_usage
+                else:
+                    print(f"[spotify_search] Skipping LLM reranker")
+                
+                # Generate reasoning for all relevant songs at once
+                yield f"data: {json.dumps({'type': 'status', 'message': 'Generating song explanations...'})}\n\n"
+                await asyncio.sleep(0.1)
+                
+                # Generate reasoning for all songs at once using batch processing
+                start_time = time.time()
+                relevant_songs, reasoning_token_usage = generate_many_song_reasoning(
+                    songs=relevant_songs,
+                    user_query=query,
+                    similarity_scores=None,  # We don't have individual similarity scores here
+                    verbose=True
+                )
+                end_time = time.time()
+                print(f"[spotify_search] Generated reasoning for {len(relevant_songs)} songs, time taken: {end_time - start_time} seconds")
+                print(f"[spotify_search] Reasoning token usage: {reasoning_token_usage}")
 
             print(f"[spotify_search] Done searching")
             
@@ -633,19 +641,22 @@ async def spotify_search(
             
             # Combine token usage from all processes (including instant search tokens)
             combined_token_usage = {
-                'total_input_tokens': search_token_usage.get('total_input_tokens', 0) + total_enrichment_tokens.get('total_input_tokens', 0) + instant_token_usage.get('total_input_tokens', 0),
-                'total_output_tokens': search_token_usage.get('total_output_tokens', 0) + total_enrichment_tokens.get('total_output_tokens', 0) + instant_token_usage.get('total_output_tokens', 0),
-                'total_requests': search_token_usage.get('total_requests', 0) + total_enrichment_tokens.get('total_requests', 0) + instant_token_usage.get('total_requests', 0),
+                'total_input_tokens': search_token_usage.get('total_input_tokens', 0) + total_enrichment_tokens.get('total_input_tokens', 0) + instant_token_usage.get('total_input_tokens', 0) + reasoning_token_usage.get('total_input_tokens', 0),
+                'total_output_tokens': search_token_usage.get('total_output_tokens', 0) + total_enrichment_tokens.get('total_output_tokens', 0) + instant_token_usage.get('total_output_tokens', 0) + reasoning_token_usage.get('total_output_tokens', 0),
+                'total_requests': search_token_usage.get('total_requests', 0) + total_enrichment_tokens.get('total_requests', 0) + instant_token_usage.get('total_requests', 0) + reasoning_token_usage.get('total_requests', 0),
                 'requests_breakdown': search_token_usage.get('requests_breakdown', []),
                 'enrichment_requests': total_enrichment_tokens.get('total_requests', 0),
                 'search_requests': search_token_usage.get('total_requests', 0),
                 'instant_requests': instant_token_usage.get('total_requests', 0),
+                'reasoning_requests': reasoning_token_usage.get('total_requests', 0),
                 'enrichment_input_tokens': total_enrichment_tokens.get('total_input_tokens', 0),
                 'enrichment_output_tokens': total_enrichment_tokens.get('total_output_tokens', 0),
                 'search_input_tokens': search_token_usage.get('total_input_tokens', 0),
                 'search_output_tokens': search_token_usage.get('total_output_tokens', 0),
                 'instant_input_tokens': instant_token_usage.get('total_input_tokens', 0),
                 'instant_output_tokens': instant_token_usage.get('total_output_tokens', 0),
+                'reasoning_input_tokens': reasoning_token_usage.get('total_input_tokens', 0),
+                'reasoning_output_tokens': reasoning_token_usage.get('total_output_tokens', 0),
                 'vector_search': search_token_usage.get('vector_search', False),
                 'embedding_tokens': search_token_usage.get('embedding_tokens', {}),
                 'reasoning_tokens': search_token_usage.get('reasoning_tokens', {}),
@@ -659,6 +670,7 @@ async def spotify_search(
             print(f"  Instant: {instant_token_usage}")
             print(f"  Enrichment: {total_enrichment_tokens}")
             print(f"  Search: {search_token_usage}")
+            print(f"  Reasoning: {reasoning_token_usage}")
             print(f"  Combined: {combined_token_usage}")
             
             # Convert Song objects to dictionaries for JSON serialization

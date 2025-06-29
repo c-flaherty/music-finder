@@ -8,7 +8,7 @@ import os
 import concurrent.futures
 from typing import Tuple
 
-def search_library(client: LLMClient, library: list[Song], user_query: str, n: int = 3, chunk_size: int = 1000, verbose: bool = False) -> tuple[list[Song], dict]:
+def search_library(client: LLMClient, library: list[Song], user_query: str, n: int = 3, chunk_size: int = 1000, generate_song_reasoning: bool = False, verbose: bool = False) -> tuple[list[Song], dict]:
     """
     Search the library for songs that match the user's query.
 
@@ -59,7 +59,7 @@ def search_library(client: LLMClient, library: list[Song], user_query: str, n: i
     }
     
     for chunk in chunks:
-        chunk_results, chunk_token_usage = recursive_search(client, chunk, user_query, n=n, verbose=verbose)
+        chunk_results, chunk_token_usage = recursive_search(client, chunk, user_query, n=n, generate_song_reasoning=generate_song_reasoning, verbose=verbose)
         filtered_songs.extend(chunk_results)
         
         # Aggregate token usage
@@ -94,7 +94,93 @@ def search_library(client: LLMClient, library: list[Song], user_query: str, n: i
         
     return filtered_songs, total_token_usage
 
-def vector_search_library(user_id: str, user_query: str, n: int = 10, match_threshold: float = 0.5, verbose: bool = False) -> tuple[list[Song], dict]:
+def generate_many_song_reasoning(songs: list[Song], user_query: str, similarity_scores: list[float] = None, verbose: bool = False) -> tuple[list[Song], dict]:
+    """
+    Generate reasoning for multiple songs using concurrent processing.
+    
+    Args:
+        songs: List of songs to generate reasoning for
+        user_query: The user's search query
+        similarity_scores: Optional list of similarity scores (one per song)
+        verbose: Whether to print verbose output
+        
+    Returns:
+        A tuple of (songs with reasoning attached, aggregated token usage)
+    """
+    if not songs:
+        return [], {'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0}
+    
+    if verbose:
+        print(f"Generating specific reasoning for {len(songs)} matched songs using {min(10, len(songs))} concurrent threads...")
+    
+    try:
+        # Prepare data for concurrent processing
+        song_data = []
+        for i, song in enumerate(songs):
+            similarity_score = similarity_scores[i] if similarity_scores and i < len(similarity_scores) else None
+            song_data.append((song, user_query, similarity_score, verbose))
+        
+        # Use ThreadPoolExecutor with max 10 workers for concurrent reasoning generation
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            # Submit all reasoning generation tasks
+            future_to_song = {
+                executor.submit(generate_individual_song_reasoning, song_info[0], song_info[1], song_info[2], song_info[3]): i 
+                for i, song_info in enumerate(song_data)
+            }
+            
+            # Collect results as they complete
+            reasoned_songs = [None] * len(songs)  # Maintain original order
+            total_reasoning_tokens = {'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0}
+            
+            for future in concurrent.futures.as_completed(future_to_song):
+                song_index = future_to_song[future]
+                try:
+                    song_with_reasoning, token_usage = future.result()
+                    reasoned_songs[song_index] = song_with_reasoning
+                    
+                    # Aggregate token usage
+                    total_reasoning_tokens['input_tokens'] += token_usage.get('input_tokens', 0)
+                    total_reasoning_tokens['output_tokens'] += token_usage.get('output_tokens', 0)
+                    total_reasoning_tokens['total_tokens'] += token_usage.get('total_tokens', 0)
+                    
+                    if verbose:
+                        print(f"Completed reasoning for: {song_with_reasoning.name}")
+                        
+                except Exception as e:
+                    if verbose:
+                        print(f"[WARNING] Failed to generate reasoning for song at index {song_index}: {e}")
+                    # Use original song with fallback reasoning
+                    original_song = song_data[song_index][0]
+                    similarity_score = song_data[song_index][2]
+                    fallback_reason = f"Vector similarity match based on semantic content"
+                    if similarity_score is not None:
+                        fallback_reason += f" (similarity: {similarity_score:.3f})"
+                    original_song.reasoning = fallback_reason
+                    reasoned_songs[song_index] = original_song
+        
+        # Filter out None entries and return
+        final_songs = [song for song in reasoned_songs if song is not None]
+        
+        if verbose:
+            print(f"Successfully generated reasoning for {len(final_songs)} songs using concurrent processing")
+            for i, song in enumerate(final_songs):
+                print(f"Song {i+1}: {song.name} - {song.reasoning}")
+        
+        return final_songs, total_reasoning_tokens
+        
+    except Exception as e:
+        print(f"[WARNING] Failed to generate specific reasoning with concurrent processing: {e}")
+        # Fallback to basic reasoning with similarity scores
+        for i, song in enumerate(songs):
+            similarity_score = similarity_scores[i] if similarity_scores and i < len(similarity_scores) else None
+            if similarity_score is not None:
+                song.reasoning = f"Vector similarity match based on semantic content (similarity: {similarity_score:.3f})"
+            else:
+                song.reasoning = "Vector similarity match based on semantic content"
+        
+        return songs, {'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0, 'error': str(e)}
+
+def vector_search_library(user_id: str, user_query: str, n: int = 10, match_threshold: float = 0.5, generate_song_reasoning: bool = False, verbose: bool = False) -> tuple[list[Song], dict]:
     """
     Search the song library using vector similarity search.
 
@@ -154,74 +240,17 @@ def vector_search_library(user_id: str, user_query: str, n: int = 10, match_thre
             )
             songs.append(song)
         
-        # Generate specific reasoning for each matched song using LLM in concurrent threads
-        reasoning_token_usage = {'input_tokens': 0, 'output_tokens': 0}
+        # Generate specific reasoning for each matched song using the utility function
         cleaned_reasoning_tokens = {'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0}
         
-        if songs:
-            if verbose:
-                print(f"Generating specific reasoning for {len(songs)} matched songs using {min(10, len(songs))} concurrent threads...")
+        if generate_song_reasoning and songs:
+            # Extract similarity scores for reasoning generation
+            similarity_scores = [response.data[i].get('similarity', None) for i in range(len(songs))]
             
-            try:
-                # Prepare data for concurrent processing
-                song_data = []
-                for i, song in enumerate(songs):
-                    similarity_score = response.data[i].get('similarity', None)
-                    song_data.append((song, user_query, similarity_score, verbose))
-                
-                # Use ThreadPoolExecutor with max 10 workers for concurrent reasoning generation
-                with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-                    # Submit all reasoning generation tasks
-                    future_to_song = {
-                        executor.submit(generate_individual_song_reasoning, song_info[0], song_info[1], song_info[2], song_info[3]): i 
-                        for i, song_info in enumerate(song_data)
-                    }
-                    
-                    # Collect results as they complete
-                    reasoned_songs = [None] * len(songs)  # Maintain original order
-                    total_reasoning_tokens = {'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0}
-                    
-                    for future in concurrent.futures.as_completed(future_to_song):
-                        song_index = future_to_song[future]
-                        try:
-                            song_with_reasoning, token_usage = future.result()
-                            reasoned_songs[song_index] = song_with_reasoning
-                            
-                            # Aggregate token usage
-                            total_reasoning_tokens['input_tokens'] += token_usage.get('input_tokens', 0)
-                            total_reasoning_tokens['output_tokens'] += token_usage.get('output_tokens', 0)
-                            total_reasoning_tokens['total_tokens'] += token_usage.get('total_tokens', 0)
-                            
-                            if verbose:
-                                print(f"Completed reasoning for: {song_with_reasoning.name}")
-                                
-                        except Exception as e:
-                            if verbose:
-                                print(f"[WARNING] Failed to generate reasoning for song at index {song_index}: {e}")
-                            # Use original song with fallback reasoning
-                            original_song = song_data[song_index][0]
-                            similarity_score = song_data[song_index][2]
-                            fallback_reason = f"Vector similarity match based on semantic content"
-                            if similarity_score is not None:
-                                fallback_reason += f" (similarity: {similarity_score:.3f})"
-                            original_song.reasoning = fallback_reason
-                            reasoned_songs[song_index] = original_song
-                
-                # Update songs list with reasoned songs (maintaining order)
-                songs = [song for song in reasoned_songs if song is not None]
-                cleaned_reasoning_tokens = total_reasoning_tokens
-                
-                if verbose:
-                    print(f"Successfully generated reasoning for {len(songs)} songs using concurrent processing")
-                    for i, song in enumerate(songs):
-                        print(f"Song {i+1}: {song.name} - {song.reasoning}")
-                        
-            except Exception as e:
-                print(f"[WARNING] Failed to generate specific reasoning with concurrent processing: {e}")
-                # Fallback to basic reasoning with similarity scores
-                for i, song in enumerate(songs):
-                    similarity_score = response.data[i].get('similarity', 'N/A')
-                    song.reasoning = f"Vector similarity match based on semantic content (similarity: {similarity_score:.3f})" if isinstance(similarity_score, (int, float)) else "Vector similarity match based on semantic content"
+            # Use the new utility function for concurrent reasoning generation
+            songs, cleaned_reasoning_tokens = generate_many_song_reasoning(
+                songs, user_query, similarity_scores, verbose
+            )
         
         # Token usage summary
         token_usage = {
@@ -298,8 +327,8 @@ def create_query_embedding(query: str, openai_client: OpenAI = None, model: str 
         # Return empty embedding and token usage on error
         return [], {'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0, 'error': str(e)}
 
-def recursive_search(client: LLMClient, sublibrary: list[Song], user_query: str, n: int = 3, verbose: bool = False) -> tuple[list[Song], dict]:
-    prompt = get_basic_query(sublibrary, user_query, n)
+def recursive_search(client: LLMClient, sublibrary: list[Song], user_query: str, n: int = 3, generate_song_reasoning: bool = False, verbose: bool = False) -> tuple[list[Song], dict]:
+    prompt = get_basic_query(sublibrary, user_query, n, generate_song_reasoning=generate_song_reasoning)
 
     if verbose:
         print("PROMPT LENGTH")
@@ -328,7 +357,7 @@ def recursive_search(client: LLMClient, sublibrary: list[Song], user_query: str,
         print(f"  Input tokens: {token_usage.get('input_tokens', 'N/A')}")
         print(f"  Output tokens: {token_usage.get('output_tokens', 'N/A')}")
 
-    song_reasons = decode_assistant_response(response_text)
+    song_reasons = decode_assistant_response(response_text, generate_song_reasoning=generate_song_reasoning)
 
     if verbose:
         print("SONG REASONS LENGTH")
