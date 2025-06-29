@@ -26,7 +26,7 @@ supabase_url = os.getenv('SUPABASE_URL')
 supabase_service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
 SKIP_EXPENSIVE_STEPS: bool = False
-SKIP_SUPABASE_CACHE: bool = True
+SKIP_SUPABASE_CACHE: bool = False
 SKIP_WEB_SEARCH_ENRICHMENT: bool = False
 HARDCODE_SONG_COUNT: int | None = 10
 
@@ -38,7 +38,7 @@ def get_lyrics(song_name: str, artist_names: list[str]) -> str:
         time.sleep(0.2)
         return f"these are lyrics for {song_name} by {', '.join(artist_names)}"
     
-    search_query = f"{song_name} {', '.join(artist_names)}"
+    search_query = f"{song_name} {artist_names[0]}"
     print(f"[DEBUG] Searching for lyrics for: {search_query}")
     
     headers = {
@@ -125,11 +125,11 @@ def get_lyrics(song_name: str, artist_names: list[str]) -> str:
         return ""
     lyrics = song_data.get('response', {}).get('song', {}).get('lyrics', {}).get('plain', "")
     print(f"[DEBUG] Lyrics length: {len(lyrics)}")
-    if len(lyrics) > 1600:
-        lyrics = lyrics[:1600]
+    # if len(lyrics) > 1600:
+    #     lyrics = lyrics[:1600]
     return lyrics
 
-def get_song_metadata(song_name: str, artist_names: list[str]) -> tuple[str, dict]:
+def get_song_metadata(song_name: str, artist_names: list[str], max_retries: int = 2) -> tuple[str, dict]:
     """Search the web for song information and ask LLM to summarize it."""
     print(f"[DEBUG] Getting song metadata for: {song_name} by {', '.join(artist_names)}")
     if SKIP_EXPENSIVE_STEPS:
@@ -141,27 +141,33 @@ def get_song_metadata(song_name: str, artist_names: list[str]) -> tuple[str, dic
         return "", {}
 
     # Step 1: Search the web for information about the song and artist
-    search_query = f'"{song_name}" by {", ".join(artist_names)} background info genre history cultural significance'
+    search_query = f'"{song_name}" by {", ".join(artist_names)} background'
     
-    try:
-        start_time = time.time()
-        # Get web search results
-        search_results = search_internet(search_query, top_n=3)
-        end_time = time.time()
-        print(f"Time taken to search internet: {end_time - start_time} seconds")
-        
-        if not search_results:
-            print(f"[DEBUG] No web search results found for {song_name}")
-            return "", {}
-        
-        # Combine all search results into one text
-        combined_search_text = "\n\n---\n\n".join(search_results)
-        
-        # Step 2: Send to OpenAI for summarization
-        start_time = time.time()
-        llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
-        
-        summarization_prompt = f"""
+    for attempt in range(max_retries):
+        try:
+            start_time = time.time()
+            # Get web search results with timeout
+            search_results = search_internet(search_query, top_n=3)
+            end_time = time.time()
+            print(f"Time taken to search internet: {end_time - start_time} seconds")
+            
+            if not search_results:
+                if attempt < max_retries - 1:
+                    print(f"[DEBUG] No web search results found for {song_name} (attempt {attempt + 1}), retrying...")
+                    time.sleep(random.uniform(3, 6))  # Wait before retry
+                    continue
+                else:
+                    print(f"[DEBUG] No web search results found for {song_name} after {max_retries} attempts")
+                    return "", {}
+            
+            # Combine all search results into one text
+            combined_search_text = "\n\n---\n\n".join(search_results)
+            
+            # Step 2: Send to OpenAI for summarization
+            start_time = time.time()
+            llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
+            
+            summarization_prompt = f"""
 Based on the following web search results about the song "{song_name}" by {', '.join(artist_names)}, please provide a comprehensive summary that addresses these specific questions:
 
 1. What is the genre of this song?
@@ -170,31 +176,37 @@ Based on the following web search results about the song "{song_name}" by {', '.
 4. What does it reference (lyrically, musically, culturally)?
 5. What is its cultural significance?
 
-Please structure your response to clearly address each of these questions.
+Please structure your response to clearly address each of these questions. BE CONCISE.
 
 Web search results:
-{combined_search_text[:4000]}  # Limit to avoid token limits
+{combined_search_text[:6000]}  # Limit to avoid token limits
 """
-        
-        response_tuple = llm_client.generate(
-            [[TextPrompt(text=summarization_prompt)]],
-            max_tokens=4000
-        )
-        end_time = time.time()
-        print(f"Time taken to get summary from openai: {end_time - start_time} seconds")
-        response_blocks = response_tuple[0]
-        first_block = response_blocks[0]
-        response_text = first_block.text
-        
-        # Extract token usage from metadata
-        token_usage = response_tuple[1] if len(response_tuple) > 1 else {}
-        
-        print(f"[DEBUG] Generated metadata summary for {song_name}, {response_text}")
-        return response_text, token_usage
-        
-    except Exception as e:
-        print(f"[ERROR] Failed to get song metadata for {song_name}: {e}")
-        return "", {}
+            
+            response_tuple = llm_client.generate(
+                [[TextPrompt(text=summarization_prompt)]],
+                max_tokens=5000
+            )
+            end_time = time.time()
+            print(f"Time taken to get summary from openai: {end_time - start_time} seconds")
+            response_blocks = response_tuple[0]
+            first_block = response_blocks[0]
+            response_text = first_block.text
+            
+            # Extract token usage from metadata
+            token_usage = response_tuple[1] if len(response_tuple) > 1 else {}
+            
+            print(f"[DEBUG] Generated metadata summary for {song_name} (attempt {attempt + 1})")
+            return response_text, token_usage
+            
+        except Exception as e:
+            if attempt < max_retries - 1:
+                print(f"[ERROR] Failed to get song metadata for {song_name} (attempt {attempt + 1}): {e}")
+                print(f"[DEBUG] Retrying metadata fetch for {song_name} in a few seconds...")
+                time.sleep(random.uniform(5, 10))  # Longer wait for metadata retries
+                continue
+            else:
+                print(f"[ERROR] Failed to get song metadata for {song_name} after {max_retries} attempts: {e}")
+                return "", {}
 
 def get_songs_from_playlists(playlists_data: Dict, access_token: str, query: str) -> list[RawSong]:
     all_songs = []
@@ -355,7 +367,7 @@ def save_enriched_songs_to_db(enriched_songs: list[SearchSong]) -> None:
                 'song_link': song.song_link,
                 'lyrics': song.lyrics,
                 'song_metadata': song.song_metadata,
-                #'embedding': song.embedding
+                'embedding': song.embedding
             }
             songs_data.append(song_data)
         
@@ -393,11 +405,12 @@ def enrich_songs(songs: list[RawSong]):
             #     print(f"[LYRICS SUCCESS] {song.name} - {', '.join(song.artists)}")
             # else:
             #     print(f"[LYRICS FAIL] {song.name} - {', '.join(song.artists)}")
+            print(f"[LYRICS SUCCESS] {song.name} - {', '.join(song.artists)} {len(embedding)}")
             return SearchSong(
                 **song.__dict__,
                 lyrics=lyrics,
                 song_metadata=song_metadata,
-                #embedding=embedding
+                embedding=embedding
             ), token_usage
         except Exception as e:
             print(f"[LYRICS FAIL] {song.name} - {', '.join(song.artists)} (error: {e})")
@@ -405,16 +418,16 @@ def enrich_songs(songs: list[RawSong]):
                 **song.__dict__,
                 lyrics=lyrics,  # Now lyrics is always defined
                 song_metadata=song_metadata,
-                #embedding=embedding
+                embedding=embedding
             ), {}
     
     if not songs:
         return
 
-    # Process songs in parallel with a reasonable number of workers
-    max_workers = min(50, len(songs))
+    # Reduce concurrency to prevent memory corruption issues
+    max_workers = min(5, len(songs))  # Much lower concurrency for safety
     last_emit_time = time.time()
-    print(f"[spotify_search] Enriching {len(songs)} songs with {max_workers} workers")
+    print(f"[spotify_search] Enriching {len(songs)} songs with {max_workers} workers (reduced for safety)")
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all enrichment tasks
         future_to_song = {executor.submit(enrich_single_song, song): song for song in songs}
