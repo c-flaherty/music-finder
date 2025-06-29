@@ -46,7 +46,7 @@ def get_google_links(query: str, n: int = 3) -> List[str]:
     print(f"[PROFILE] get_google_links: {elapsed:.3f}s")
     return [it["link"] for it in resp.get("items", [])]
 
-def fetch_clean_text(url: str, timeout: int = 15, max_retries: int = 2) -> Optional[str]:
+def fetch_clean_text(url: str, timeout: int = 10, max_retries: int = 2) -> Optional[str]:
     """
     Download *url* and extract main text using trafilatura.
     Returns None on network/parse failure.
@@ -55,16 +55,30 @@ def fetch_clean_text(url: str, timeout: int = 15, max_retries: int = 2) -> Optio
     t0 = time.time()
     
     for attempt in range(max_retries):
+        session = None
         try:
-            # Use simple requests without complex SSL handling to avoid memory corruption
-            headers = _DEFAULT_HEADERS.copy()
+            # Create a fresh session for each request to avoid memory issues
+            session = requests.Session()
+            session.headers.update(_DEFAULT_HEADERS)
             
-            # Simple retry strategy: just try again on failure
-            r = requests.get(url, timeout=timeout, allow_redirects=True, headers=headers)
-            if not r.ok or not r.text:
+            # Shorter timeout to avoid hanging requests
+            r = session.get(url, timeout=timeout, allow_redirects=True)
+            
+            if not r.ok:
                 if attempt < max_retries - 1:
                     print(f"[PROFILE] fetch_clean_text (retry {attempt + 1}): HTTP {r.status_code} for {url[:60]}...")
-                    time.sleep(random.uniform(1, 2))  # Shorter delays
+                    time.sleep(random.uniform(1, 3))
+                    continue
+                else:
+                    elapsed = time.time() - t0
+                    print(f"[PROFILE] fetch_clean_text (failed): {elapsed:.3f}s for {url[:60]}...")
+                    return None
+            
+            # Check if we got any content
+            if not r.text or len(r.text) < 10:
+                if attempt < max_retries - 1:
+                    print(f"[PROFILE] fetch_clean_text (retry {attempt + 1}): Empty content for {url[:60]}...")
+                    time.sleep(random.uniform(1, 3))
                     continue
                 else:
                     elapsed = time.time() - t0
@@ -80,13 +94,20 @@ def fetch_clean_text(url: str, timeout: int = 15, max_retries: int = 2) -> Optio
         except Exception as e:
             if attempt < max_retries - 1:
                 print(f"[PROFILE] fetch_clean_text (retry {attempt + 1}): {type(e).__name__} for {url[:60]}...")
-                time.sleep(random.uniform(1, 2))  # Shorter delays
+                time.sleep(random.uniform(2, 4))  # Longer delays on error
                 continue
             else:
                 elapsed = time.time() - t0
                 print(f"[PROFILE] fetch_clean_text (error): {elapsed:.3f}s for {url[:60]}...")
                 print(f"[warn] fetch failed {url[:60]}…: {e}")
                 return None
+        finally:
+            # Always clean up the session to prevent memory leaks
+            if session:
+                try:
+                    session.close()
+                except:
+                    pass
     
     return None
 
@@ -97,16 +118,22 @@ def _parallel_fetch(urls: List[str], timeout: int = 15, max_retries: int = 2) ->
     t0 = time.time()
     out: List[Optional[str]] = [None] * len(urls)
     
-    # Reduce concurrency to avoid memory corruption issues
-    max_workers = min(3, len(urls))  # Much lower concurrency for safety
+    # Process URLs sequentially to prevent memory corruption
+    print(f"[PROFILE] Processing {len(urls)} URLs sequentially to prevent malloc errors")
     
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {pool.submit(fetch_clean_text, u, timeout, max_retries): i
-                   for i, u in enumerate(urls)}
-        for fut in as_completed(futures):
-            out[futures[fut]] = fut.result()
+    for i, url in enumerate(urls):
+        try:
+            result = fetch_clean_text(url, timeout, max_retries)
+            out[i] = result
+            # Add small delay between requests to prevent overwhelming servers
+            if i < len(urls) - 1:
+                time.sleep(0.5)
+        except Exception as e:
+            print(f"[warn] Sequential fetch failed for URL {i}: {e}")
+            out[i] = None
+    
     elapsed = time.time() - t0
-    print(f"[PROFILE] _parallel_fetch: {elapsed:.3f}s for {len(urls)} URLs (max_workers: {max_workers})")
+    print(f"[PROFILE] _parallel_fetch (sequential): {elapsed:.3f}s for {len(urls)} URLs")
     return out
 
 def search_internet(query: str, top_n: int = 5, timeout: int = 15, max_retries: int = 2) -> List[str]:

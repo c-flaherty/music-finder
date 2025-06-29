@@ -381,8 +381,10 @@ async def spotify_search(
                         await asyncio.sleep(0.1)
                 
                 # Save newly enriched songs to database
-                if not SKIP_SUPABASE_CACHE:
-                    save_enriched_songs_to_db(enriched_songs)
+                # NOTE: Individual songs are now saved to database during enrichment process
+                # No need for batch save anymore - this prevents data loss if process crashes
+                # if not SKIP_SUPABASE_CACHE:
+                #     save_enriched_songs_to_db(enriched_songs)
             else:
                 print(f"[spotify_search] No unprocessed songs found, using already processed songs")
                 # Simulate progress for already processed songs to show smooth progress bar

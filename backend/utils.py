@@ -28,7 +28,7 @@ supabase_service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 SKIP_EXPENSIVE_STEPS: bool = False
 SKIP_SUPABASE_CACHE: bool = False
 SKIP_WEB_SEARCH_ENRICHMENT: bool = False
-HARDCODE_SONG_COUNT: int | None = 10
+HARDCODE_SONG_COUNT: int | None = None
 
 # --------------------------- Lyrics helper ---------------------------
 def get_lyrics(song_name: str, artist_names: list[str]) -> str:
@@ -379,10 +379,12 @@ def save_enriched_songs_to_db(enriched_songs: list[SearchSong]) -> None:
         print(f"[spotify_search] Error saving songs to database: {str(e)}")
 
 def enrich_songs(songs: list[RawSong]):
-    """Enrich raw songs with lyrics and metadata in parallel, yielding results as they complete."""
+    """Enrich raw songs with lyrics and metadata in parallel, yielding results as they complete.
+    Now saves each song to database immediately after enrichment."""
     processed_count = 0
     total_count = len(songs)
     lyrics_success_count = 0
+    db_save_success_count = 0
     total_enrichment_tokens = {
         'total_input_tokens': 0,
         'total_output_tokens': 0,
@@ -444,18 +446,42 @@ def enrich_songs(songs: list[RawSong]):
                 total_enrichment_tokens['total_output_tokens'] += token_usage.get('output_tokens', 0)
                 total_enrichment_tokens['total_requests'] += 1 if not SKIP_EXPENSIVE_STEPS else 0
                 
+                # Save to database immediately after enrichment
+                if not SKIP_SUPABASE_CACHE:
+                    try:
+                        save_enriched_songs_to_db([enriched_song])  # Save single song
+                        db_save_success_count += 1
+                        print(f"[DB SUCCESS] Saved {enriched_song.name} to database")
+                    except Exception as db_error:
+                        print(f"[DB ERROR] Failed to save {enriched_song.name} to database: {db_error}")
+                        # Continue processing even if database save fails
+                
                 yield enriched_song, total_enrichment_tokens
             except Exception as e:
                 song = future_to_song[future]
                 print(f"[LYRICS FAIL] {song.name} - {', '.join(song.artists)} (error: {e})")
-                yield SearchSong(
+                # Still try to save the empty song to database to avoid reprocessing
+                empty_song = SearchSong(
                     **song.__dict__,
                     lyrics="",
                     song_metadata=""
-                ), total_enrichment_tokens
+                )
+                
+                if not SKIP_SUPABASE_CACHE:
+                    try:
+                        save_enriched_songs_to_db([empty_song])
+                        print(f"[DB SUCCESS] Saved empty {song.name} to database (to avoid reprocessing)")
+                    except Exception as db_error:
+                        print(f"[DB ERROR] Failed to save empty {song.name} to database: {db_error}")
+                
+                yield empty_song, total_enrichment_tokens
             
             processed_count += 1
-    print(f"[LYRICS SUMMARY] Processed {total_count} songs, got lyrics for {lyrics_success_count} songs.")
+    
+    print(f"[ENRICHMENT SUMMARY] Processed {total_count} songs:")
+    print(f"  - Got lyrics for {lyrics_success_count} songs")
+    print(f"  - Successfully saved {db_save_success_count} songs to database")
+    print(f"  - Failed to save {total_count - db_save_success_count} songs to database")
 
 def get_playlist_names(access_token: str, refresh_token: Optional[str] = None) -> tuple[Dict, str]:
     """
