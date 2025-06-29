@@ -28,7 +28,7 @@ supabase_service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 SKIP_EXPENSIVE_STEPS: bool = False
 SKIP_SUPABASE_CACHE: bool = False
 SKIP_WEB_SEARCH_ENRICHMENT: bool = False
-HARDCODE_SONG_COUNT: int | None = None
+HARDCODE_SONG_COUNT: int | None = 10
 
 # --------------------------- Lyrics helper ---------------------------
 def get_lyrics(song_name: str, artist_names: list[str]) -> str:

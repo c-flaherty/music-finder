@@ -48,29 +48,25 @@ from utils import (
     SKIP_SUPABASE_CACHE
 )
 
-def update_users_songs_join_table(access_token, raw_songs: list[RawSong]):
+def get_user_id(access_token) -> str:
+    """Get the user ID from the access token"""
+    user_response = requests.get(
+        'https://api.spotify.com/v1/me',
+        headers={
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json'
+        }
+    )
+    if not user_response.ok:
+        raise HTTPException(status_code=user_response.status_code, detail="Failed to fetch user profile")
+    user_id = user_response.json().get('id')
+    if not user_id:
+        raise HTTPException(status_code=400, detail="No user ID found")
+    return user_id
+
+def update_users_songs_join_table(user_id: str, raw_songs: list[RawSong]) -> None:
     """Update the users_songs join table with new songs for the user"""
-    try:
-        # Get user ID from Spotify API
-        user_response = requests.get(
-            'https://api.spotify.com/v1/me',
-            headers={
-                'Authorization': f'Bearer {access_token}',
-                'Content-Type': 'application/json'
-            }
-        )
-        
-        if not user_response.ok:
-            print(f"[update_users_songs_join_table] Failed to get user info: {user_response.status_code}")
-            return
-            
-        user_data = user_response.json()
-        user_id = user_data.get('id')
-        
-        if not user_id:
-            print(f"[update_users_songs_join_table] No user ID found")
-            return
-            
+    try:            
         print(f"[update_users_songs_join_table] Processing songs for user: {user_id}")
         
         # Initialize Supabase client
@@ -531,7 +527,10 @@ async def spotify_search(
             await asyncio.sleep(0.1)
 
             # get user id
-            update_users_songs_join_table(updated_access_token, raw_songs)
+            user_id = get_user_id(access_token)
+
+            # update users_songs join table
+            update_users_songs_join_table(user_id, raw_songs)
 
             # Process unprocessed songs with progress updates
             enriched_songs = []
@@ -593,6 +592,7 @@ async def spotify_search(
                 # Use vector search instead of LLM search
                 try:
                     relevant_songs, search_token_usage = vector_search_library(
+                        user_id=user_id,
                         user_query=query, 
                         n=10, 
                         match_threshold=0.5,  # Adjust this threshold as needed
@@ -600,20 +600,20 @@ async def spotify_search(
                     )
                     
                     # If vector search returns no results, fallback to LLM search
-                    if not relevant_songs and all_enriched_songs:
-                        print(f"[spotify_search] Vector search returned no results, falling back to LLM search")
-                        yield f"data: {json.dumps({'type': 'status', 'message': 'Vector search found no matches, trying LLM search...'})}\n\n"
-                        await asyncio.sleep(0.1)
+                    # if not relevant_songs and all_enriched_songs:
+                    #     print(f"[spotify_search] Vector search returned no results, falling back to LLM search")
+                    #     yield f"data: {json.dumps({'type': 'status', 'message': 'Vector search found no matches, trying LLM search...'})}\n\n"
+                    #     await asyncio.sleep(0.1)
                         
-                        llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
-                        relevant_songs, llm_search_token_usage = search_library(llm_client, all_enriched_songs, query, n=10, chunk_size=100, verbose=True)
+                    #     llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
+                    #     relevant_songs, llm_search_token_usage = search_library(llm_client, all_enriched_songs, query, n=10, chunk_size=100, verbose=True)
                         
-                        # Combine token usage from both vector and LLM search
-                        search_token_usage['total_input_tokens'] += llm_search_token_usage.get('total_input_tokens', 0)
-                        search_token_usage['total_output_tokens'] += llm_search_token_usage.get('total_output_tokens', 0)
-                        search_token_usage['total_requests'] += llm_search_token_usage.get('total_requests', 0)
-                        search_token_usage['fallback_llm_search'] = True
-                        search_token_usage['llm_search_tokens'] = llm_search_token_usage
+                    #     # Combine token usage from both vector and LLM search
+                    #     search_token_usage['total_input_tokens'] += llm_search_token_usage.get('total_input_tokens', 0)
+                    #     search_token_usage['total_output_tokens'] += llm_search_token_usage.get('total_output_tokens', 0)
+                    #     search_token_usage['total_requests'] += llm_search_token_usage.get('total_requests', 0)
+                    #     search_token_usage['fallback_llm_search'] = True
+                    #     search_token_usage['llm_search_tokens'] = llm_search_token_usage
                         
                 except Exception as e:
                     print(f"[spotify_search] Vector search failed: {e}, falling back to LLM search")

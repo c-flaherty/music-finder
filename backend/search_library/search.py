@@ -94,7 +94,7 @@ def search_library(client: LLMClient, library: list[Song], user_query: str, n: i
         
     return filtered_songs, total_token_usage
 
-def vector_search_library(user_query: str, n: int = 10, match_threshold: float = 0.5, verbose: bool = False) -> tuple[list[Song], dict]:
+def vector_search_library(user_id: str, user_query: str, n: int = 10, match_threshold: float = 0.5, verbose: bool = False) -> tuple[list[Song], dict]:
     """
     Search the song library using vector similarity search.
 
@@ -126,8 +126,9 @@ def vector_search_library(user_query: str, n: int = 10, match_threshold: float =
     
     try:
         # Call the Supabase function to find similar songs
-        response = supabase.rpc('match_songs', {
-            'query_embedding': query_embedding,
+        response = supabase.rpc('match_songs_v2', {
+            'query_emb': query_embedding,
+            'p_user_id': user_id,
             'match_threshold': match_threshold,
             'match_count': n
         }).execute()
