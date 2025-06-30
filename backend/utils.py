@@ -130,84 +130,85 @@ def get_lyrics(song_name: str, artist_names: list[str]) -> str:
     #     lyrics = lyrics[:1600]
     return lyrics
 
-def get_song_metadata(song_name: str, artist_names: list[str], max_retries: int = 2) -> tuple[str, dict]:
-    """Search the web for song information and ask LLM to summarize it."""
-    print(f"[DEBUG] Getting song metadata for: {song_name} by {', '.join(artist_names)}")
-    if SKIP_EXPENSIVE_STEPS:
-        time.sleep(0.2)
-        return f"this is a song description for {song_name} by {', '.join(artist_names)}", {}
+def get_song_metadata(
+    song_name: str,
+    artist_names: list[str],
+    album: str = "",
+    max_retries: int = 2
+) -> tuple[str, dict]:
+    """
+    Return an LLM-generated summary of a song, using web evidence when available.
 
-    if SKIP_WEB_SEARCH_ENRICHMENT:
+    Fallback order:
+      1. `"song_name" by artist background`
+      2. `"album" by first_artist album background`
+      3. `first_artist background music`
+      4. Ask the model to answer from prior knowledge even without evidence.
+    """
+    print(f"[DEBUG] Getting song metadata for: {song_name} by {', '.join(artist_names)}")
+    if SKIP_EXPENSIVE_STEPS or SKIP_WEB_SEARCH_ENRICHMENT:
         time.sleep(0.2)
         return "", {}
 
-    # Step 1: Search the web for information about the song and artist
-    search_query = f'"{song_name}" by {", ".join(artist_names)} background'
-    
-    for attempt in range(max_retries):
+    first_artist = artist_names[0] if artist_names else ""
+    query_chain = [
+        f'"{song_name}" by {", ".join(artist_names)} background',
+        f'"{album}" by {first_artist} album background' if album else None,
+        f'{first_artist} background music'
+    ]
+    # Remove any Nones that slipped in (e.g. no album supplied)
+    query_chain = [q for q in query_chain if q]
+
+    combined_search_text = ""
+    for q_idx, query in enumerate(query_chain):
         try:
-            start_time = time.time()
-            # Get web search results with timeout
-            search_results = search_internet(search_query, top_n=3)
-            end_time = time.time()
-            print(f"Time taken to search internet: {end_time - start_time} seconds")
-            
-            if not search_results:
-                if attempt < max_retries - 1:
-                    print(f"[DEBUG] No web search results found for {song_name} (attempt {attempt + 1}), retrying...")
-                    time.sleep(random.uniform(3, 6))  # Wait before retry
-                    continue
-                else:
-                    print(f"[DEBUG] No web search results found for {song_name} after {max_retries} attempts")
-                    return "", {}
-            
-            # Combine all search results into one text
-            combined_search_text = "\n\n---\n\n".join(search_results)
-            
-            # Step 2: Send to OpenAI for summarization
-            start_time = time.time()
-            llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
-            
-            summarization_prompt = f"""
-Based on the following web search results about the song "{song_name}" by {', '.join(artist_names)}, please provide a comprehensive summary that addresses these specific questions:
+            start = time.time()
+            search_results = search_internet(query, top_n=3)
+            print(f"[DEBUG] Query [{q_idx+1}/{len(query_chain)}] \"{query}\" "
+                  f"-> {len(search_results)} docs in {time.time()-start:.2f}s")
+            if search_results:
+                combined_search_text = "\n\n---\n\n".join(search_results)
+                break
+        except Exception as e:
+            print(f"[WARN] Web search failed for '{query}': {e}")
 
-1. What is the genre of this song?
-2. What time period was it written in?
-3. What musical movement does it come from?
-4. What does it reference (lyrically, musically, culturally)?
-5. What is its cultural significance?
+    # ---------------- LLM call ----------------
+    llm_client = get_client("openai-direct", model_name="gpt-4o-mini")
+    if combined_search_text:
+        summarization_prompt = f"""
+Based on the following web search results about the song "{song_name}" by {', '.join(artist_names)}, answer *concisely*:
 
-Please structure your response to clearly address each of these questions. BE CONCISE.
+1. Genre
+2. Time period written
+3. Musical movement
+4. References (lyrical / musical / cultural)
+5. Cultural significance
 
 Web search results:
-{combined_search_text[:6000]}  # Limit to avoid token limits
+{combined_search_text[:6000]}
 """
-            
-            response_tuple = llm_client.generate(
-                [[TextPrompt(text=summarization_prompt)]],
-                max_tokens=5000
-            )
-            end_time = time.time()
-            print(f"Time taken to get summary from openai: {end_time - start_time} seconds")
-            response_blocks = response_tuple[0]
-            first_block = response_blocks[0]
-            response_text = first_block.text
-            
-            # Extract token usage from metadata
-            token_usage = response_tuple[1] if len(response_tuple) > 1 else {}
-            
-            print(f"[DEBUG] Generated metadata summary for {song_name} (attempt {attempt + 1})")
-            return response_text, token_usage
-            
-        except Exception as e:
-            if attempt < max_retries - 1:
-                print(f"[ERROR] Failed to get song metadata for {song_name} (attempt {attempt + 1}): {e}")
-                print(f"[DEBUG] Retrying metadata fetch for {song_name} in a few seconds...")
-                time.sleep(random.uniform(5, 10))  # Longer wait for metadata retries
-                continue
-            else:
-                print(f"[ERROR] Failed to get song metadata for {song_name} after {max_retries} attempts: {e}")
-                return "", {}
+    else:
+        summarization_prompt = f"""
+No relevant web pages were found, but please use your own knowledge to
+answer *concisely* the same five questions about:
+
+  • Song: "{song_name}"
+  • Artist(s): {', '.join(artist_names)}
+  • Album: "{album}"
+
+If any point is genuinely unknown, reply “Unknown” for that bullet.
+"""
+
+    start = time.time()
+    response_tuple = llm_client.generate(
+        [[TextPrompt(text=summarization_prompt)]],
+        max_tokens=700
+    )
+    print(f"[DEBUG] LLM call took {time.time()-start:.2f}s")
+    response_text = response_tuple[0][0].text
+    token_usage = response_tuple[1] if len(response_tuple) > 1 else {}
+
+    return response_text, token_usage
 
 def get_songs_from_playlists(playlists_data: Dict, access_token: str, query: str) -> list[RawSong]:
     all_songs = []
@@ -402,7 +403,7 @@ def enrich_songs(songs: list[RawSong]):
         try:
             ## Commented out for now to test frontend quickly
             lyrics = get_lyrics(song.name, song.artists)
-            song_metadata, token_usage = get_song_metadata(song.name, song.artists)
+            song_metadata, token_usage = get_song_metadata(song.name, song.artists, song.album)
             embedding = create_song_embedding(song)
             # if lyrics:
             #     print(f"[LYRICS SUCCESS] {song.name} - {', '.join(song.artists)}")
