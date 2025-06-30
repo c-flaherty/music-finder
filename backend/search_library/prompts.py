@@ -101,6 +101,28 @@ What is the musical movement it comes from?
 What does it reference? What is its cultural significance?
 """
 
+def get_song_doc_embedding_prompt(song: Song) -> str:
+    return f"""
+You are a music expert filing away information about all the music in the world.
+
+Here is a song: "{song.name}" by {', '.join(song.artists)}.
+
+Here are its lyrics:
+{song.lyrics}
+
+Here are some more details about the song:
+{song.song_metadata}
+"""
+
+def get_song_query_embedding_prompt(user_query: str) -> str:
+    return f"""
+You are a music expert working at a record store.. You are speaking to a customer who is trying to remember the name of a song.
+Here is the customer's description of the song:
+{user_query}
+
+Can you help the customer remember the name of the song?
+"""
+
 def get_individual_song_reasoning_query(user_query: str, song: 'Song', similarity_score: float = None) -> str:
     """
     Generate a prompt for explaining why a single song matches a user's query.
@@ -115,7 +137,8 @@ def get_individual_song_reasoning_query(user_query: str, song: 'Song', similarit
     """
     
     return f"""
-Hello, I am a music library assistant. I need to explain why this song matches the user's query.
+Hello, I am a music library assistant. I need to explain why this song matches the user's query. If it doesn't match, I have a mechanism
+to filter it out.
 
 Song Information:
 - ID: {song.id}
@@ -145,7 +168,14 @@ Tips on the tone:
 - Always use proper punctuation. In particular, use a period at the end of your explanation.
 
 Return your explanation in this exact format:
+<filter_out>true</filter_out>
 <reason>your specific explanation here</reason>
+
+Note that there are two XML tags in the response. The first one is <filter_out> and the second one is <reason>.
+- If the song should be filtered out, set <filter_out> to true.
+- If the song should not be filtered out, set <filter_out> to false.
+- If the song should be filtered out, the <reason> tag should be empty.
+- If the song should not be filtered out, the <reason> tag should be the explanation for why the song matches the query.
 
 ----
 HERE IS AN EXAMPLE OF AN EXPLANATION THAT IS TOO VERBOSE:
@@ -153,24 +183,18 @@ The song "Suzanne" by Hope Sandoval & The Warm Inventions reflects themes of lon
 evoking a similar emotional tone as works by artists like Patti Smith, making it resonate with listeners who appreciate introspective and emotionally rich music.
 """
 
-def decode_individual_song_reasoning(response: str) -> str:
+def decode_individual_song_reasoning(response: str) -> tuple[bool, str]:
     """
     Decode the assistant response to extract individual song reasoning.
     
     Returns:
-        The reasoning string, or a fallback message if parsing fails
+        A tuple of (filter_out, reason)
     """
-    lines = response.split("\n")
-    
-    for line in lines:
-        line = line.strip()
-        if line.startswith("<reason>") and line.endswith("</reason>"):
-            return line.split("<reason>")[1].split("</reason>")[0]
-    
-    # Fallback: return the first non-empty line if parsing fails
-    for line in lines:
-        line = line.strip()
-        if line:
-            return line
-    
-    return "Matches the query based on semantic similarity"
+    lines = response.strip().split("\n") 
+    assert len(lines) in [1,2], "Expected 2 lines in the response"
+    filter_out = lines[0].split("<filter_out>")[1].split("</filter_out>")[0] == "true"
+    if filter_out:
+        return True, ""
+    else:
+        reason = lines[1].split("<reason>")[1].split("</reason>")[0]
+        return False, reason

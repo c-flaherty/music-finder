@@ -1,4 +1,4 @@
-from .prompts import get_basic_query, decode_assistant_response, get_individual_song_reasoning_query, decode_individual_song_reasoning
+from .prompts import get_basic_query, decode_assistant_response, get_individual_song_reasoning_query, decode_individual_song_reasoning, get_song_doc_embedding_prompt, get_song_query_embedding_prompt
 from .types import Song
 from .clients import LLMClient, TextPrompt
 import numpy as np
@@ -136,14 +136,15 @@ def generate_many_song_reasoning(songs: list[Song], user_query: str, similarity_
                 song_index = future_to_song[future]
                 try:
                     song_with_reasoning, token_usage = future.result()
-                    reasoned_songs[song_index] = song_with_reasoning
+                    if song_with_reasoning is not None:
+                        reasoned_songs[song_index] = song_with_reasoning
                     
                     # Aggregate token usage
                     total_reasoning_tokens['input_tokens'] += token_usage.get('input_tokens', 0)
                     total_reasoning_tokens['output_tokens'] += token_usage.get('output_tokens', 0)
                     total_reasoning_tokens['total_tokens'] += token_usage.get('total_tokens', 0)
                     
-                    if verbose:
+                    if verbose and song_with_reasoning is not None:
                         print(f"Completed reasoning for: {song_with_reasoning.name}")
                         
                 except Exception as e:
@@ -203,7 +204,8 @@ def vector_search_library(user_id: str, user_query: str, n: int = 10, match_thre
     supabase: Client = create_client(supabase_url, supabase_service_key)
     
     # Generate embedding for the user query
-    query_embedding, embedding_token_usage = create_query_embedding(user_query, verbose=verbose)
+    user_query_embedding_prompt = get_song_query_embedding_prompt(user_query)
+    query_embedding, embedding_token_usage = create_query_embedding(user_query_embedding_prompt, verbose=verbose)
     
     if verbose:
         print(f"Generated query embedding with {len(query_embedding)} dimensions")
@@ -401,7 +403,7 @@ def create_song_embedding(song: Song, openai_client: OpenAI = None, model: str =
     if openai_client is None:
         openai_client = OpenAI()
     
-    song_serialization = str(song)
+    song_serialization = get_song_doc_embedding_prompt(song)
     
     # Create embedding using OpenAI API
     response = openai_client.embeddings.create(
@@ -415,7 +417,7 @@ def create_song_embedding(song: Song, openai_client: OpenAI = None, model: str =
     
     return embedding
 
-def generate_individual_song_reasoning(song: Song, user_query: str, similarity_score: float = None, verbose: bool = False) -> Tuple[Song, dict]:
+def generate_individual_song_reasoning(song: Song, user_query: str, similarity_score: float | None = None, verbose: bool = False) -> Tuple[Song | None, dict]:
     """
     Generate reasoning for why a single song matches the user's query.
     
@@ -428,59 +430,43 @@ def generate_individual_song_reasoning(song: Song, user_query: str, similarity_s
     Returns:
         A tuple of (song with reasoning attached, token usage)
     """
-    try:
-        # Import here to avoid circular imports
-        from .clients import get_client, TextPrompt
-        
-        llm_client = get_client("openai-direct", model_name="gpt-4o")
-        
-        # Generate prompt for this specific song
-        reasoning_prompt = get_individual_song_reasoning_query(user_query, song, similarity_score)
-        
-        if verbose:
-            print(f"Generating reasoning for song: {song.name} by {', '.join(song.artists)}")
-        
-        # Generate reasoning
-        response_tuple = llm_client.generate(
-            [[TextPrompt(text=reasoning_prompt)]],
-            max_tokens=200  # Reduced since we only need 1-2 sentences
-        )
-        
-        response_blocks = response_tuple[0]
-        reasoning_text = response_blocks[0].text
-        token_usage = response_tuple[1] if len(response_tuple) > 1 else {}
-        
-        # Decode the reasoning
-        reason = decode_individual_song_reasoning(reasoning_text)
-        
-        # Add similarity score to reasoning if available
-        if similarity_score is not None:
-            song.reasoning = f"{reason} (similarity: {similarity_score:.3f})"
-        else:
-            song.reasoning = reason
-            
-        # Clean up token usage
-        cleaned_token_usage = {
-            'input_tokens': token_usage.get('input_tokens', 0),
-            'output_tokens': token_usage.get('output_tokens', 0),
-            'total_tokens': token_usage.get('input_tokens', 0) + token_usage.get('output_tokens', 0)
-        }
-        
-        if verbose:
-            print(f"Generated reasoning for {song.name}: {reason}")
-        
-        return song, cleaned_token_usage
-        
-    except Exception as e:
-        if verbose:
-            print(f"[WARNING] Failed to generate reasoning for {song.name}: {e}")
-        
-        # Fallback reasoning
-        fallback_reason = f"Vector similarity match based on semantic content"
-        if similarity_score is not None:
-            fallback_reason += f" (similarity: {similarity_score:.3f})"
-        song.reasoning = fallback_reason
-        
-        return song, {'input_tokens': 0, 'output_tokens': 0, 'total_tokens': 0, 'error': str(e)}
+    # Import here to avoid circular imports
+    from .clients import get_client, TextPrompt
     
+    llm_client = get_client("openai-direct", model_name="gpt-4o")
     
+    # Generate prompt for this specific song
+    reasoning_prompt = get_individual_song_reasoning_query(user_query, song, similarity_score)
+    
+    if verbose:
+        print(f"Generating reasoning for song: {song.name} by {', '.join(song.artists)}")
+    
+    print("REASONING PROMPT\n-------\n", reasoning_prompt, "\n-------\n")
+
+    # Generate reasoning
+    response_tuple = llm_client.generate(
+        [[TextPrompt(text=reasoning_prompt)]],
+        max_tokens=200  # Reduced since we only need 1-2 sentences
+    )
+    
+    response_blocks = response_tuple[0]
+    reasoning_text = response_blocks[0].text
+    token_usage = response_tuple[1] if len(response_tuple) > 1 else {}
+    
+    # Decode the reasoning
+    filter_out, reason = decode_individual_song_reasoning(reasoning_text)
+        
+    # Clean up token usage
+    cleaned_token_usage = {
+        'input_tokens': token_usage.get('input_tokens', 0),
+        'output_tokens': token_usage.get('output_tokens', 0),
+        'total_tokens': token_usage.get('input_tokens', 0) + token_usage.get('output_tokens', 0)
+    }
+    
+    if verbose:
+        print(f"Generated reasoning for {song.name}: {reason}")
+
+    song.reasoning = reason
+    return song if not filter_out else None, cleaned_token_usage
+    
+
