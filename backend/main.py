@@ -49,6 +49,12 @@ from utils import (
     SKIP_SUPABASE_CACHE
 )
 
+# MusixMatch scraper endpoints
+from musixmatch_scraper import MusixMatchScraper
+
+# Initialize MusixMatch scraper
+musixmatch_scraper = MusixMatchScraper()
+
 def get_user_id(access_token) -> str:
     """Get the user ID from the access token"""
     user_response = requests.get(
@@ -134,6 +140,13 @@ class UpdateTableRequest(BaseModel):
 
 class SpotifyRefreshRequest(BaseModel):
     refresh_token: str
+
+class MusixMatchLyricsRequest(BaseModel):
+    artist_name: str
+    track_name: str
+
+class MusixMatchUrlRequest(BaseModel):
+    lyrics_url: str
 
 @app.post("/api/update-table")
 async def update_table(request: UpdateTableRequest):
@@ -752,3 +765,57 @@ async def refresh_spotify_token(request: SpotifyRefreshRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error refreshing token: {str(e)}")
+
+@app.post("/musixmatch/get-lyrics")
+async def musixmatch_get_lyrics(request: MusixMatchLyricsRequest):
+    """Get track lyrics using MusixMatch scraper"""
+    try:
+        result = musixmatch_scraper.get_track_lyrics(request.artist_name, request.track_name)
+        
+        if result is None:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Could not find lyrics for '{request.track_name}' by '{request.artist_name}'"
+            )
+        
+        # Transform the result to match frontend expectations
+        return {
+            'track_id': result['track'].get('spotify_id', ''),
+            'track_name': result['track']['title'],
+            'artist_name': result['track']['artist'],
+            'album_name': result['album']['title'],
+            'lyrics_body': result['lyrics'],
+            'lyrics_copyright': '',
+            'track_share_url': f"https://www.musixmatch.com/lyrics/{result['track']['artist'].replace(' ', '-')}/{result['track']['title'].replace(' ', '-')}"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting lyrics: {str(e)}")
+
+@app.post("/musixmatch/get-track-by-url")
+async def musixmatch_get_track_by_url(request: MusixMatchUrlRequest):
+    """Get track information from a direct MusixMatch lyrics URL"""
+    try:
+        result = musixmatch_scraper.get_track_by_url(request.lyrics_url)
+        
+        if result is None:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Could not find track information from URL: {request.lyrics_url}"
+            )
+        
+        # Transform the result to match frontend expectations
+        return {
+            'track_id': result['track'].get('spotify_id', ''),
+            'track_name': result['track']['title'],
+            'artist_name': result['track']['artist'],
+            'album_name': result['album']['title'],
+            'lyrics_body': result['lyrics'],
+            'lyrics_copyright': '',
+            'track_share_url': request.lyrics_url
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting track by URL: {str(e)}")
