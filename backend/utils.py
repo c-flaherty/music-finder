@@ -400,30 +400,33 @@ def enrich_songs(songs: list[RawSong]):
         song_metadata = ""
         token_usage = {}
         embedding = []
+
+        ## Commented out for now to test frontend quickly
         try:
-            ## Commented out for now to test frontend quickly
             lyrics = get_lyrics(song.name, song.artists)
-            song_metadata, token_usage = get_song_metadata(song.name, song.artists, song.album)
-            embedding = create_song_embedding(song)
-            # if lyrics:
-            #     print(f"[LYRICS SUCCESS] {song.name} - {', '.join(song.artists)}")
-            # else:
-            #     print(f"[LYRICS FAIL] {song.name} - {', '.join(song.artists)}")
-            print(f"[LYRICS SUCCESS] {song.name} - {', '.join(song.artists)} {len(embedding)}")
-            return SearchSong(
-                **song.__dict__,
-                lyrics=lyrics,
-                song_metadata=song_metadata,
-                embedding=embedding
-            ), token_usage
         except Exception as e:
-            print(f"[LYRICS FAIL] {song.name} - {', '.join(song.artists)} (error: {e})")
-            return SearchSong(
-                **song.__dict__,
-                lyrics=lyrics,  # Now lyrics is always defined
-                song_metadata=song_metadata,
-                embedding=embedding
-            ), {}
+            print(f"[LYRICS ERROR] {song.name} - {', '.join(song.artists)}: {e}")
+            lyrics = ""
+            
+        song_metadata, token_usage = get_song_metadata(song.name, song.artists, song.album)
+            
+        # Create SearchSong object first, then create embedding
+        enriched_song = SearchSong(
+            **song.__dict__,
+            lyrics=lyrics,
+            song_metadata=song_metadata,
+            embedding=[]  # Will be populated below
+        )
+        embedding = create_song_embedding(enriched_song)
+        enriched_song.embedding = embedding
+        
+        # if lyrics:
+        #     print(f"[LYRICS SUCCESS] {song.name} - {', '.join(song.artists)}")
+        # else:
+        #     print(f"[LYRICS FAIL] {song.name} - {', '.join(song.artists)}")
+        print(f"[LYRICS SUCCESS] {song.name} - {', '.join(song.artists)} {len(embedding)}")
+        return enriched_song, token_usage
+
     
     if not songs:
         return
@@ -438,46 +441,27 @@ def enrich_songs(songs: list[RawSong]):
         
         # Collect results as they complete and yield them
         for future in as_completed(future_to_song):
-            try:
-                enriched_song, token_usage = future.result()
-                if enriched_song.lyrics:
-                    lyrics_success_count += 1
-                
-                # Aggregate token usage
-                total_enrichment_tokens['total_input_tokens'] += token_usage.get('input_tokens', 0)
-                total_enrichment_tokens['total_output_tokens'] += token_usage.get('output_tokens', 0)
-                total_enrichment_tokens['total_requests'] += 1 if not SKIP_EXPENSIVE_STEPS else 0
-                
-                # Save to database immediately after enrichment
-                if not SKIP_SUPABASE_CACHE:
-                    try:
-                        save_enriched_songs_to_db([enriched_song])  # Save single song
-                        db_save_success_count += 1
-                        print(f"[DB SUCCESS] Saved {enriched_song.name} to database")
-                    except Exception as db_error:
-                        print(f"[DB ERROR] Failed to save {enriched_song.name} to database: {db_error}")
-                        # Continue processing even if database save fails
-                
-                yield enriched_song, total_enrichment_tokens
-            except Exception as e:
-                song = future_to_song[future]
-                print(f"[LYRICS FAIL] {song.name} - {', '.join(song.artists)} (error: {e})")
-                # Still try to save the empty song to database to avoid reprocessing
-                empty_song = SearchSong(
-                    **song.__dict__,
-                    lyrics="",
-                    song_metadata=""
-                )
-                
-                if not SKIP_SUPABASE_CACHE:
-                    try:
-                        save_enriched_songs_to_db([empty_song])
-                        print(f"[DB SUCCESS] Saved empty {song.name} to database (to avoid reprocessing)")
-                    except Exception as db_error:
-                        print(f"[DB ERROR] Failed to save empty {song.name} to database: {db_error}")
-                
-                yield empty_song, total_enrichment_tokens
+            enriched_song, token_usage = future.result()
+            if enriched_song.lyrics:
+                lyrics_success_count += 1
             
+            # Aggregate token usage
+            total_enrichment_tokens['total_input_tokens'] += token_usage.get('input_tokens', 0)
+            total_enrichment_tokens['total_output_tokens'] += token_usage.get('output_tokens', 0)
+            total_enrichment_tokens['total_requests'] += 1 if not SKIP_EXPENSIVE_STEPS else 0
+            
+            # Save to database immediately after enrichment
+            if not SKIP_SUPABASE_CACHE:
+                try:
+                    save_enriched_songs_to_db([enriched_song])  # Save single song
+                    db_save_success_count += 1
+                    print(f"[DB SUCCESS] Saved {enriched_song.name} to database")
+                except Exception as db_error:
+                    print(f"[DB ERROR] Failed to save {enriched_song.name} to database: {db_error}")
+                    # Continue processing even if database save fails
+            
+            yield enriched_song, total_enrichment_tokens
+
             processed_count += 1
     
     print(f"[ENRICHMENT SUMMARY] Processed {total_count} songs:")

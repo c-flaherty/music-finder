@@ -533,8 +533,8 @@ async def spotify_search(
             print(f"[spotify_search] Found {len(unprocessed_raw_songs)} unprocessed songs")
             print(f"[spotify_search] Found {len(raw_songs)} total songs")
 
-            # Calculate total progress steps: song processing + LLM search + result processing
-            total_progress_steps = len(unprocessed_raw_songs + already_processed_enriched_songs)
+            # Calculate total progress steps
+            total_progress_steps = len(unprocessed_raw_songs)
             
             # Emit initial progress
             yield f"data: {json.dumps({'type': 'progress', 'processed': 0, 'total': total_progress_steps, 'message': f'Cannoli is listening to your music...'})}\n\n"
@@ -577,16 +577,16 @@ async def spotify_search(
                 # No need for batch save anymore - this prevents data loss if process crashes
                 # if not SKIP_SUPABASE_CACHE:
                 #     save_enriched_songs_to_db(enriched_songs)
-            else:
-                print(f"[spotify_search] No unprocessed songs found, using already processed songs")
-                # Simulate progress for already processed songs to show smooth progress bar
-                batch_size = max(1, len(already_processed_enriched_songs) // 10)  # Show ~10 progress updates
-                for i in range(0, len(already_processed_enriched_songs), batch_size):
-                    current_processed = min(i + batch_size, len(already_processed_enriched_songs))
-                    song = already_processed_enriched_songs[min(i, len(already_processed_enriched_songs) - 1)]
-                    progress_update_copy = get_progress_update_copy(current_processed, total_progress_steps, song)
-                    yield f"data: {json.dumps({'type': 'progress', 'processed': current_processed, 'total': total_progress_steps, 'message': progress_update_copy})}\n\n"
-                    await asyncio.sleep(0.2)  # Slightly longer delay to make progress visible
+            #else:
+                #print(f"[spotify_search] No unprocessed songs found, using already processed songs")
+                ## Simulate progress for already processed songs to show smooth progress bar
+                #batch_size = max(1, len(already_processed_enriched_songs) // 10)  # Show ~10 progress updates
+                #for i in range(0, len(already_processed_enriched_songs), batch_size):
+                #   current_processed = min(i + batch_size, len(already_processed_enriched_songs))
+                #    song = already_processed_enriched_songs[min(i, len(already_processed_enriched_songs) - 1)]
+                #    progress_update_copy = get_progress_update_copy(current_processed, total_progress_steps, song)
+                #     yield f"data: {json.dumps({'type': 'progress', 'processed': current_processed, 'total': total_progress_steps, 'message': progress_update_copy})}\n\n"
+                #    await asyncio.sleep(0.2)  # Slightly longer delay to make progress visible
 
             
             # Combine all enriched songs

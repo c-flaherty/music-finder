@@ -171,6 +171,8 @@ Return your explanation in this exact format:
 <filter_out>true</filter_out>
 <reason>your specific explanation here</reason>
 
+DO NOT PUT ```xml ... ``` tags around your response.
+
 Note that there are two XML tags in the response. The first one is <filter_out> and the second one is <reason>.
 - If the song should be filtered out, set <filter_out> to true.
 - If the song should not be filtered out, set <filter_out> to false.
@@ -191,7 +193,14 @@ def decode_individual_song_reasoning(response: str) -> tuple[bool, str]:
         A tuple of (filter_out, reason)
     """
     lines = response.strip().split("\n") 
-    assert len(lines) in [1,2], "Expected 2 lines in the response"
+
+    # edge case
+    if lines[0].strip().startswith("```xml"):
+        lines = lines[1:]
+    if lines[-1].strip().endswith("```"):
+        lines = lines[:-1]
+
+    assert len(lines) in [1,2], f"Expected 2 lines in the response, got {len(lines)}: {lines}"
     filter_out = lines[0].split("<filter_out>")[1].split("</filter_out>")[0] == "true"
     if filter_out:
         return True, ""
